@@ -4,10 +4,10 @@ import { Button } from './ui/button';
 import { toast } from 'sonner';
 
 interface LoginViewProps {
-  onBack: () => void;
+  onLoginSuccess: () => void;
 }
 
-export default function LoginView({ onBack }: LoginViewProps) {
+export default function LoginView({ onLoginSuccess }: LoginViewProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -19,10 +19,11 @@ export default function LoginView({ onBack }: LoginViewProps) {
       return;
     }
     toast.success(`Logging in as ${email}...`);
+    onLoginSuccess();
   };
 
   return (
-    <section className="max-w-sm w-full mx-auto px-4">
+    <div className="w-full max-w-sm mx-auto">
       <div className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 shadow-sm">
         <div className="mb-6 text-center">
           <h2 className="text-2xl font-bold text-slate-900">Login</h2>
@@ -83,17 +84,7 @@ export default function LoginView({ onBack }: LoginViewProps) {
             </Button>
           </div>
         </form>
-
-        <div className="mt-4 text-center">
-          <button
-            type="button"
-            onClick={onBack}
-            className="text-xs text-blue-900 hover:underline cursor-pointer font-medium"
-          >
-            Back to landing page
-          </button>
-        </div>
       </div>
-    </section>
+    </div>
   );
 }
