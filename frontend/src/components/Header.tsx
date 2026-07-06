@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 
 interface HeaderProps {
   view: 'landing' | 'search';
-  currentTab: 'home' | 'history';
+  currentTab: 'home' | 'history' | 'doc-logs';
   onChangeTab: (tab: 'home' | 'history') => void;
   onLogout?: () => void;
 }

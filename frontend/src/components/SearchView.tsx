@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Search, Trash2, Download, History, Upload, X, Filter, FileText } from 'lucide-react';
+import { Search, Trash2, Download, History, Upload, Filter, FileText } from 'lucide-react';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
 
@@ -66,14 +66,14 @@ const INITIAL_DOCUMENTS: DocumentItem[] = [
 
 interface SearchViewProps {
   onAddHistoryLog: (docName: string, action: string) => void;
+  onViewDocLogs: (docName: string) => void;
 }
 
-export default function SearchView({ onAddHistoryLog }: SearchViewProps) {
+export default function SearchView({ onAddHistoryLog, onViewDocLogs }: SearchViewProps) {
   const [documents, setDocuments] = useState<DocumentItem[]>(INITIAL_DOCUMENTS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('All');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [logDoc, setLogDoc] = useState<DocumentItem | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -316,7 +316,7 @@ export default function SearchView({ onAddHistoryLog }: SearchViewProps) {
                         <Button
                           variant="ghost"
                           title="View logs"
-                          onClick={() => setLogDoc(doc)}
+                          onClick={() => onViewDocLogs(doc.name)}
                           className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-slate-100 text-slate-500 hover:text-slate-700 cursor-pointer rounded-lg"
                         >
                           <History className="h-3.5 w-3.5" />
@@ -346,61 +346,6 @@ export default function SearchView({ onAddHistoryLog }: SearchViewProps) {
           </table>
         )}
       </div>
-
-      {/* Document Log */}
-      {logDoc && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-slate-200 rounded-xl shadow-xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/50">
-              <div className="text-left">
-                <h3 className="text-sm font-bold text-slate-900">Document Activity Log</h3>
-                <p className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[280px]" title={logDoc.name}>
-                  {logDoc.name}
-                </p>
-              </div>
-              <button
-                onClick={() => setLogDoc(null)}
-                className="text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 max-h-[300px] overflow-y-auto">
-              <div className="relative border-l border-slate-200 pl-4 space-y-4">
-                {logDoc.logs.map((log, index) => (
-                  <div key={index} className="relative text-left">
-                    {/* Log bullet indicator */}
-                    <span className="absolute -left-[21px] top-1 bg-white border border-blue-900 rounded-full h-2.5 w-2.5 flex items-center justify-center" />
-
-                    <p className="text-xs font-semibold text-slate-800">
-                      {log.action}
-                    </p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
-                      By: <span className="font-medium text-slate-700">{log.user}</span>
-                    </p>
-                    <p className="text-[9px] text-slate-400 mt-0.5">
-                      {log.date}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="border-t border-slate-100 px-6 py-4 flex justify-end bg-slate-50/50">
-              <Button
-                onClick={() => setLogDoc(null)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-4 py-2 rounded-lg font-semibold cursor-pointer text-xs border border-slate-200"
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

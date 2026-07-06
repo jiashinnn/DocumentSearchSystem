@@ -26,13 +26,15 @@ const INITIAL_HISTORY: AuditLogItem[] = [
 
 export default function App() {
   const [view, setView] = useState<'landing' | 'search'>('landing');
-  const [searchTab, setSearchTab] = useState<'home' | 'history'>('home');
+  const [searchTab, setSearchTab] = useState<'home' | 'history' | 'doc-logs'>('home');
   const [historyLogs, setHistoryLogs] = useState<AuditLogItem[]>(INITIAL_HISTORY);
+  const [selectedDocNameForLogs, setSelectedDocNameForLogs] = useState<string | null>(null);
 
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to log out?")) {
       setView('landing');
       setSearchTab('home'); // Reset tab view on logout
+      setSelectedDocNameForLogs(null);
     }
   };
 
@@ -51,6 +53,11 @@ export default function App() {
     setHistoryLogs(prev => [newLog, ...prev]);
   };
 
+  const handleViewDocLogs = (docName: string) => {
+    setSelectedDocNameForLogs(docName);
+    setSearchTab('doc-logs');
+  };
+
   return (
     <div className="w-full min-h-screen lg:h-screen lg:overflow-hidden bg-slate-50 text-slate-900 flex flex-col font-sans antialiased">
       <Header 
@@ -64,9 +71,21 @@ export default function App() {
         {view === 'landing' ? (
           <LandingView onLoginSuccess={() => setView('search')} />
         ) : searchTab === 'home' ? (
-          <SearchView onAddHistoryLog={handleAddHistoryLog} />
-        ) : (
+          <SearchView 
+            onAddHistoryLog={handleAddHistoryLog} 
+            onViewDocLogs={handleViewDocLogs}
+          />
+        ) : searchTab === 'history' ? (
           <HistoryView logs={historyLogs} />
+        ) : (
+          <HistoryView 
+            logs={historyLogs} 
+            selectedDocName={selectedDocNameForLogs}
+            onBack={() => {
+              setSearchTab('home');
+              setSelectedDocNameForLogs(null);
+            }}
+          />
         )}
       </main>
 

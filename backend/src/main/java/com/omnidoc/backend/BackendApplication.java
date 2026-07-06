@@ -1,4 +1,4 @@
-package com.omnidoc.backend;
+package com.OmniDoc.backend;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

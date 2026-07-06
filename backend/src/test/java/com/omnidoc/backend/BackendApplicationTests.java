@@ -1,4 +1,4 @@
-package com.omnidoc.backend;
+package com.OmniDoc.backend;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

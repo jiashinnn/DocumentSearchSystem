@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, History, Filter } from 'lucide-react';
+import { Search, History, Filter, ArrowLeft } from 'lucide-react';
 
 interface AuditLogItem {
   id: string;
@@ -11,14 +11,25 @@ interface AuditLogItem {
 
 interface HistoryViewProps {
   logs: AuditLogItem[];
+  selectedDocName?: string | null;
+  onBack?: () => void;
 }
 
-export default function HistoryView({ logs }: HistoryViewProps) {
+export default function HistoryView({ logs, selectedDocName, onBack }: HistoryViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAction, setSelectedAction] = useState('All');
 
-  const filteredLogs = logs.filter(log => {
-    const matchesSearch = log.docName.toLowerCase().includes(searchQuery.toLowerCase());
+  // Filter logs by specific document if provided
+  const targetLogs = selectedDocName
+    ? logs.filter(log => log.docName.toLowerCase() === selectedDocName.toLowerCase())
+    : logs;
+
+  const filteredLogs = targetLogs.filter(log => {
+    // If viewing single doc, search text filters on User or Action instead of docName
+    const matchesSearch = selectedDocName
+      ? log.user.toLowerCase().includes(searchQuery.toLowerCase()) || log.action.toLowerCase().includes(searchQuery.toLowerCase())
+      : log.docName.toLowerCase().includes(searchQuery.toLowerCase());
+    
     const matchesAction = selectedAction === 'All' || log.action === selectedAction;
     return matchesSearch && matchesAction;
   });
@@ -41,6 +52,25 @@ export default function HistoryView({ logs }: HistoryViewProps) {
   return (
     <div className="w-full px-6 sm:px-10 py-6 h-full flex flex-col overflow-hidden">
       
+      {/* Title & Back Button (shown only when viewing a specific doc's logs) */}
+      {selectedDocName && onBack && (
+        <div className="flex items-center gap-3 mb-6 shrink-0 text-left">
+          <button
+            onClick={onBack}
+            className="flex items-center justify-center p-2 rounded-lg hover:bg-slate-100 border border-slate-200 bg-white text-slate-600 hover:text-slate-900 cursor-pointer transition-colors"
+            title="Back to documents"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">Document Activity Logs</h1>
+            <p className="text-xs text-slate-500 mt-0.5 truncate max-w-xl">
+              Showing actions for <span className="font-semibold text-slate-800">{selectedDocName}</span>
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Search & Filters */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-slate-200 p-4 rounded-xl shadow-sm mb-6 shrink-0">
         <div className="flex flex-1 w-full sm:w-auto items-center gap-3">
@@ -48,7 +78,7 @@ export default function HistoryView({ logs }: HistoryViewProps) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Search history by document name..."
+              placeholder={selectedDocName ? "Search by action or user..." : "Search history by document name..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900"
