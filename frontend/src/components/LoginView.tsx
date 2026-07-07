@@ -12,14 +12,33 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       toast.error("Please enter both email and password.");
       return;
     }
-    toast.success(`Logging in as ${email}...`);
-    onLoginSuccess();
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auth/login`,{
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(`Welcome back, ${data.name}!`);
+        onLoginSuccess();
+      } else {
+        const errorText = await response.text();
+        toast.error(errorText || "Login failed. Please check your credentials.");
+      }
+    } catch (error) {
+      console.error("Login connection error: ", error);
+      toast.error("Unable to connect to the authentication server.");
+    }
   };
 
   return (
