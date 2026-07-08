@@ -29,22 +29,4 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
         }
     }
-
-    @Autowired
-    private UserRepository userRepository;
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-    @PostMapping("/register-temp")
-    public ResponseEntity<?> registerTemp(@RequestBody LoginRequest registration) {
-        if (userRepository.findByEmail(registration.getEmail()).isPresent()) {
-            return ResponseEntity.badRequest().body("User already exists.");
-        }
-        User user = new User();
-        user.setEmail(registration.getEmail());
-        user.setName("Test Employee");
-        // Hash the password using the exact same encoder!
-        user.setPassword(passwordEncoder.encode(registration.getPassword()));
-        userRepository.save(user);
-        return ResponseEntity.ok("User registered successfully with hashed password.");
-    }
 }
