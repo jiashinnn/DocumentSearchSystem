@@ -7,3 +7,8 @@ when upload the document, backend will use apache tika to extract the text, text
 For the database, got user, file, record and chunk. What i think of: user will have email, name, and password. file got id, name (want unique but if the status is inactive, the user can use that name, do not how to handle this), type, size (the value of the size), path, status(active/inactive). For the status, inactive means when user delete the files, i dont want to delete all the file information, cuz in the history, user can view who delete the files (or maybe you have more correct way to handle this). for the chunk, got id, chunk text and embedding vector ?( not sure the structure correct or not, and with fk file id). then the record, got if, fk file id, fk user email, date action.
 
 For the backend, i know there is a standard structure for spring boot: controller >service > mapper > DTO/Repository > Entity >Database, i want to strictly follow this to learn the spring boot.
+
+Extra information:
+for the chunking, i think can try semantic chunking?
+then for the search: to_tsvector for keyword search, pg_trgm for fuzzy search, and pgvector for semantic search. (not sure is the best or not)
+my goal is not only search by the document name for the keyword, the the keyword also can be the content inside the document, meaning that if user do not know the doc name, he can search using content

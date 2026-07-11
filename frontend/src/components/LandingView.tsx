@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import LoginView from './LoginView';
 
 interface LandingViewProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (user: { email: string; name: string }) => void;
 }
 
 export default function LandingView({ onLoginSuccess }: LandingViewProps) {

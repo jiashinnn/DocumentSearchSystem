@@ -2,15 +2,11 @@ package com.OmniDoc.backend.controller;
 
 import com.OmniDoc.backend.dto.LoginRequest;
 import com.OmniDoc.backend.dto.LoginResponse;
-import com.OmniDoc.backend.entity.User;
-import com.OmniDoc.backend.repository.UserRepository;
 import com.OmniDoc.backend.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.security.crypto.password.PasswordEncoder;
 
 @RestController
 @RequestMapping("/api/auth")

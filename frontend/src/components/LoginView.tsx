@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { toast } from 'sonner';
 
 interface LoginViewProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (user: { email: string; name: string }) => void;
 }
 
 export default function LoginView({ onLoginSuccess }: LoginViewProps) {
@@ -30,7 +30,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       if (response.ok) {
         const data = await response.json();
         toast.success(`Welcome back, ${data.name}!`);
-        onLoginSuccess();
+        onLoginSuccess({ email: data.email, name: data.name });
       } else {
         const errorText = await response.text();
         toast.error(errorText || "Login failed. Please check your credentials.");

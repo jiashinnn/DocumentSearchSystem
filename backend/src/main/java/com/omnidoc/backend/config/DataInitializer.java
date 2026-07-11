@@ -25,7 +25,7 @@ public class DataInitializer implements CommandLineRunner {
             employee.setEmail("name@company.com");
             employee.setName("Test Employee");
             // Automatically hash the password using BCrypt on startup!
-            employee.setPassword(passwordEncoder.encode("password"));
+            employee.setPassword(passwordEncoder.encode(""));
             userRepository.save(employee);
         }
 
@@ -34,7 +34,7 @@ public class DataInitializer implements CommandLineRunner {
             User admin = new User();
             admin.setEmail("admin@company.com");
             admin.setName("Admin User");
-            admin.setPassword(passwordEncoder.encode("admin123"));
+            admin.setPassword(passwordEncoder.encode(""));
             userRepository.save(admin);
         }
     }
