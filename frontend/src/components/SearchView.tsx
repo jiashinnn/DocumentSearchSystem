@@ -312,6 +312,37 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
     }
   }, [searchQuery]);
 
+  // Highlight matching words in yellow
+  const highlightText = (text: string, search: string) => {
+    if (!search || !search.trim()) return text;
+
+    // Split search query by spaces to highlight individual keywords
+    const keywords = search.trim().split(/\s+/).filter(Boolean);
+    if (keywords.length === 0) return text;
+
+    // Escape regex characters and join keywords into a single pattern (OR logic)
+    const escapedKeywords = keywords.map(kw => kw.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+    const pattern = new RegExp(`(${escapedKeywords.join('|')})`, 'gi');
+
+    // Split text by the matched keywords
+    const parts = text.split(pattern);
+
+    return (
+      <>
+        {parts.map((part, index) =>
+          pattern.test(part) ? (
+            <mark key={index} className="bg-yellow-200 text-slate-900 px-0.5 rounded font-semibold">
+              {part}
+            </mark>
+          ) : (
+            part
+          )
+        )}
+      </>
+    );
+  };
+
+
   return (
     <div className="w-full px-6 sm:px-10 py-6 h-full flex flex-col overflow-hidden">
 
@@ -411,26 +442,16 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-blue-900 shrink-0" />
                       <span className="font-bold text-slate-800 text-sm truncate max-w-md">
-                        {result.docName}
-                      </span>
-                    </div>
-
-                    {/* Total Relevancy Score */}
-                    <div className="flex items-center shrink-0">
-                      <span className="px-2.5 py-0.8 rounded text-[10px] font-bold bg-blue-50 text-blue-900 border border-blue-100">
-                        Match Relevancy: {(result.score * 100).toFixed(0)}%
-                      </span>
+                                            {highlightText(result.docName, searchQuery)}
+                                          </span>
                     </div>
                   </div>
                   {/* Extracted Text Paragraph Matching Snippet */}
                   <div className="text-xs text-slate-600 leading-relaxed bg-slate-50/50 border border-slate-100 p-3 rounded-lg whitespace-pre-wrap font-sans">
-                    {result.chunkText}
-                  </div>
+                                    {highlightText(result.chunkText, searchQuery)}
+                                  </div>
                   {/* Score Breakdown & Action Buttons */}
                   <div className="flex justify-between items-center mt-1 border-t border-slate-100 pt-2 shrink-0">
-                    <div className="text-[10px] text-slate-400">
-                      Semantic match: {(result.semanticScore * 100).toFixed(0)}% | Fuzzy & filename match: {(result.fuzzyScore * 100).toFixed(0)}%
-                    </div>
                     <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"

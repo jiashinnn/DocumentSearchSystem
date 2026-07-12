@@ -3,3 +3,4 @@ out/
 .vscode/
 **/target/
 **/node_modules/
+backend/uploads/

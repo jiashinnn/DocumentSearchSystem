@@ -147,8 +147,8 @@ public class DocumentServiceImpl implements DocumentService {
             int chunkIndex = 1;
             for (String chunkText : cleanChunks) {
                 float[] vector = embeddingModel.embed(chunkText).content().vector();
-                String vectorString = Arrays.toString(vector); // e.g. "[0.1, 0.22, ...]"
-                // Call custom repository query to cast vector and insert
+                String vectorString = Arrays.toString(vector);
+                // Call repository query to cast vector and insert
                 chunkRepository.saveVectorChunk(dbFile.getId(), chunkText, vectorString);
 //                log.info(">>> [EMBEDDING] Vectorized & saved Chunk #{}/{} (Length: {} chars)",
 //                        chunkIndex++, cleanChunks.size(), chunkText.length());
@@ -157,7 +157,7 @@ public class DocumentServiceImpl implements DocumentService {
 //            log.warn(">>> [CHUNKER] Document has no readable text content. Skipped chunking.");
         }
 
-        // Save to Record
+        // Save to Record table
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("User context not found."));
         Record auditRecord = new Record();
@@ -208,7 +208,7 @@ public class DocumentServiceImpl implements DocumentService {
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("User context not found."));
 
-        // Save log record to database
+        // Save record to Database
         Record auditRecord = new Record();
         auditRecord.setFile(file);
         auditRecord.setUser(user);
@@ -238,7 +238,7 @@ public class DocumentServiceImpl implements DocumentService {
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("User context not found."));
 
-        // Save audit log to database
+        // Save record to database
         Record auditRecord = new Record();
         auditRecord.setFile(file);
         auditRecord.setUser(user);
@@ -339,25 +339,40 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     public List<com.OmniDoc.backend.dto.SearchResultDto> searchDocuments(String queryText, Double alpha, int limit) {
-        // Generate local vector embedding for the query text
-        float[] queryVector = embeddingModel.embed(queryText).content().vector();
-        String queryVectorString = Arrays.toString(queryVector);
-
-        // Call the repository to fetch scores using the hybrid query
-        List<ChunkRepository.SearchResultProjection> projections =
-                chunkRepository.searchHybrid(queryVectorString, queryText, alpha, limit);
-
-        // 3. Map projections to DTO list
-        return projections.stream()
-                .map(p -> new com.OmniDoc.backend.dto.SearchResultDto(
-                        p.getId(),
-                        p.getFileId(),
-                        p.getDocName(),
-                        p.getChunkText(),
-                        p.getScore(),
-                        p.getSemanticScore(),
-                        p.getFuzzyScore()
-                ))
+        double filenameThreshold = 0.30; // 30% filename match threshold (Tier 1)
+        double minScoreCutoff = 0.25;    // 25% minimum combined score cutoff (Tier 3)
+        // Attempt Filename-only match first
+        List<ChunkRepository.SearchResultProjection> filenameMatches =
+                chunkRepository.searchByFilename(queryText, filenameThreshold);
+        List<ChunkRepository.SearchResultProjection> finalProjections;
+        if (!filenameMatches.isEmpty()) {
+            log.info(">>> [SEARCH] [TIER 1] Filename match triggered for query: '{}'. Found {} matches.", queryText, filenameMatches.size());
+            finalProjections = filenameMatches;
+        } else {
+            // Fallback to Hybrid (Semantic + Fuzzy) Search
+            log.info(">>> [SEARCH] [TIER 2] No filename match. Running Hybrid Semantic Search for: '{}'", queryText);
+            float[] queryVector = embeddingModel.embed(queryText).content().vector();
+            String queryVectorString = Arrays.toString(queryVector);
+            finalProjections = chunkRepository.searchHybrid(queryVectorString, queryText, alpha, minScoreCutoff, limit);
+        }
+        // Print scores to terminal and map to DTOs
+        return finalProjections.stream()
+                .map(p -> {
+                    log.info(">>> [SEARCH MATCH] File: '{}' | Combined Score: {} (Semantic: {}, Fuzzy: {})",
+                            p.getDocName(),
+                            String.format("%.3f", p.getScore()),
+                            String.format("%.3f", p.getSemanticScore()),
+                            String.format("%.3f", p.getFuzzyScore()));
+                    return new com.OmniDoc.backend.dto.SearchResultDto(
+                            p.getId(),
+                            p.getFileId(),
+                            p.getDocName(),
+                            p.getChunkText(),
+                            p.getScore(),
+                            p.getSemanticScore(),
+                            p.getFuzzyScore()
+                    );
+                })
                 .collect(Collectors.toList());
     }
 
