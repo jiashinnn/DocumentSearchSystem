@@ -1,10 +1,10 @@
-# 📂 OmniDoc - Smart Document Search System
+# OmniDoc - Smart Document Search System
 
 OmniDoc is a secure, high-performance web application designed for indexing, searching, and managing internal corporate documentation. It utilizes a state-of-the-art **Retrieval-Augmented Generation (RAG)** pipeline to perform hybrid semantic and keyword text search on document content.
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 ### Frontend
 *   **Core**: React.js (Vite + TypeScript)
@@ -24,7 +24,7 @@ OmniDoc is a secure, high-performance web application designed for indexing, sea
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```text
 DocumentSearchSystem/
@@ -41,9 +41,9 @@ DocumentSearchSystem/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
-### 📋 Prerequisites
+### Prerequisites
 Ensure you have the following installed on your machine:
 1.  **Java JDK 17** or higher
 2.  **Node.js 18** or higher
