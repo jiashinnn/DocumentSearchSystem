@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = "${app.cors.allowed-origins}")
 public class AuthController {
 
     @Autowired
@@ -21,7 +21,7 @@ public class AuthController {
         try {
             LoginResponse response = userService.login(loginRequest);
             return ResponseEntity.ok(response);
-        }  catch (RuntimeException e) {
+        } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
         }
     }

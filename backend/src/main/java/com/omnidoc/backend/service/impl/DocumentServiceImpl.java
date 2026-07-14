@@ -16,7 +16,6 @@ import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel;
 import jakarta.transaction.Transactional;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -30,6 +29,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.services.s3.S3Client;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -41,8 +41,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.logging.Logger;
+import java.util.logging.Level;
 
-@Slf4j
 @Service
 public class DocumentServiceImpl implements DocumentService {
 
@@ -63,6 +64,13 @@ public class DocumentServiceImpl implements DocumentService {
 
     private final EmbeddingModel embeddingModel = new AllMiniLmL6V2EmbeddingModel();
     private final Tika tika = new Tika();
+    private static final Logger log = Logger.getLogger(DocumentServiceImpl.class.getName());
+
+    @Autowired
+    private S3Client s3Client;
+
+    @Value("${r2.bucket-name}")
+    private String bucketName;
 
     @Override
     @Transactional
@@ -76,9 +84,10 @@ public class DocumentServiceImpl implements DocumentService {
         if (file.getSize() > maxSizeBytes) {
             throw new IllegalArgumentException("File size exceeds the maximum limit of 50MB!");
         }
-        log.info(">>> [UPLOAD] Starting file upload process. File: {}, User: {}", originalFilename, userEmail);
+        log.info(">>> [UPLOAD] Starting file upload process. File: " + originalFilename + ", User: " + userEmail);
 
         // Check only accept text-based doc
+        // FIRST DECLARATION OF extension
         String extension = getFileExtension(originalFilename).toLowerCase();
         List<String> allowedExtensions = Arrays.asList("txt", "pdf", "docx", "xlsx", "pptx");
         if (!allowedExtensions.contains(extension)) {
@@ -88,42 +97,49 @@ public class DocumentServiceImpl implements DocumentService {
         // Check unique name only among ACTIVE files
         Optional<File> existingFileOpt = fileRepository.findByNameAndStatus(originalFilename, "ACTIVE");
         if (existingFileOpt.isPresent()) {
-            log.warn(">>> [UPLOAD] Duplicate filename check failed. File already exists and is ACTIVE.");
+            log.warning(">>> [UPLOAD] Duplicate filename check failed. File already exists and is ACTIVE.");
             throw new IllegalArgumentException("A file named '" + originalFilename + "' already exists!");
         }
 
-        // Save exact file to storage folder
+        // REUSE the extension variable (do not write "String extension" again)
+        // Generate a unique name for physical disk storage
+        String uniqueDiskName = java.util.UUID.randomUUID().toString() + "." + extension;
+
+        // Save to storage folder under the UNIQUE disk name
         Path uploadPath = Paths.get(uploadDir);
         if (!Files.exists(uploadPath)) {
             Files.createDirectories(uploadPath);
-//            log.info(">>> [UPLOAD] Created upload directory: {}", uploadPath.toAbsolutePath());
         }
-        Path targetPath = uploadPath.resolve(originalFilename);
+        Path targetPath = uploadPath.resolve(uniqueDiskName);
         Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
 
-//        log.info(">>> [UPLOAD] Saved physical file to disk: {}", targetPath.toAbsolutePath());
+        String uniqueKey = java.util.UUID.randomUUID().toString() + "." + extension;
+
+        s3Client.putObject(builder -> builder
+                .bucket(bucketName)
+                .key(uniqueKey)
+                .contentType(file.getContentType()),
+                software.amazon.awssdk.core.sync.RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
 
         // Save metadata to database: File table
         File dbFile = new File();
-        dbFile.setName(originalFilename);
+        dbFile.setName(originalFilename); // Keep original display name
         dbFile.setType(file.getContentType());
         dbFile.setSize(file.getSize());
-
-        dbFile.setPath(targetPath.toAbsolutePath().toString());
+        dbFile.setPath(uniqueKey);
         dbFile.setStatus("ACTIVE");
         dbFile.setCreatedAt(LocalDateTime.now());
         dbFile = fileRepository.save(dbFile);
 
-//        log.info(">>> [DATABASE] File metadata saved with ID: {}", dbFile.getId());
-
         // Extract content using Apache Tika
         String extractedText;
-        try {
-//            log.info(">>> [TIKA] Extracting text content from file...");
-            extractedText = tika.parseToString(targetPath);
-//            log.info(">>> [TIKA] Successfully extracted {} characters of text.", extractedText != null ? extractedText.length() : 0);
+        try (java.io.InputStream is = file.getInputStream()) {
+            // log.info(">>> [TIKA] Extracting text content from file...");
+            extractedText = tika.parseToString(is);
+            // log.info(">>> [TIKA] Successfully extracted {} characters of text.",
+            // extractedText != null ? extractedText.length() : 0);
         } catch (Exception e) {
-//            log.error(">>> [TIKA] Failed to extract text: ", e);
+            // log.error(">>> [TIKA] Failed to extract text: ", e);
             throw new RuntimeException("Failed to extract text from file: " + e.getMessage());
         }
 
@@ -131,7 +147,7 @@ public class DocumentServiceImpl implements DocumentService {
         if (extractedText != null && !extractedText.trim().isEmpty()) {
             Document document = Document.from(extractedText);
             List<TextSegment> segments = new DocumentByParagraphSplitter(300, 30).split(document);
-//            log.info(">>> [CHUNKER] Text split into {} raw segments.", segments.size());
+            // log.info(">>> [CHUNKER] Text split into {} raw segments.", segments.size());
 
             List<String> cleanChunks = segments.stream()
                     .map(TextSegment::text)
@@ -140,8 +156,9 @@ public class DocumentServiceImpl implements DocumentService {
                     .distinct()
                     .collect(Collectors.toList());
 
-//            log.info(">>> [CHUNKER] Deduplicated & cleaned. Total chunks to embed: {}", cleanChunks.size());
-//            log.info(">>> [EMBEDDING] Vectorizing chunks using MiniLM model...");
+            // log.info(">>> [CHUNKER] Deduplicated & cleaned. Total chunks to embed: {}",
+            // cleanChunks.size());
+            // log.info(">>> [EMBEDDING] Vectorizing chunks using MiniLM model...");
 
             // Convert chunks to vector embeddings and store in PostgresSQL
             int chunkIndex = 1;
@@ -150,11 +167,13 @@ public class DocumentServiceImpl implements DocumentService {
                 String vectorString = Arrays.toString(vector);
                 // Call repository query to cast vector and insert
                 chunkRepository.saveVectorChunk(dbFile.getId(), chunkText, vectorString);
-//                log.info(">>> [EMBEDDING] Vectorized & saved Chunk #{}/{} (Length: {} chars)",
-//                        chunkIndex++, cleanChunks.size(), chunkText.length());
+                // log.info(">>> [EMBEDDING] Vectorized & saved Chunk #{}/{} (Length: {}
+                // chars)",
+                // chunkIndex++, cleanChunks.size(), chunkText.length());
             }
         } else {
-//            log.warn(">>> [CHUNKER] Document has no readable text content. Skipped chunking.");
+            // log.warn(">>> [CHUNKER] Document has no readable text content. Skipped
+            // chunking.");
         }
 
         // Save to Record table
@@ -167,7 +186,8 @@ public class DocumentServiceImpl implements DocumentService {
         auditRecord.setDateAction(LocalDateTime.now());
         recordRepository.save(auditRecord);
 
-//        log.info(">>> [AUDIT] Saved audit log. Upload complete for file ID: {}", dbFile.getId());
+        // log.info(">>> [AUDIT] Saved audit log. Upload complete for file ID: {}",
+        // dbFile.getId());
 
         return dbFile;
     }
@@ -225,19 +245,13 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     @Transactional
-    public org.springframework.core.io.Resource downloadDocument(Long id, String userEmail) throws java.io.FileNotFoundException {
+    public org.springframework.core.io.Resource downloadDocument(Long id, String userEmail)
+            throws java.io.FileNotFoundException {
         File file = fileRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Document not found."));
-
-        java.nio.file.Path filePath = java.nio.file.Paths.get(file.getPath());
-        if (!java.nio.file.Files.exists(filePath)) {
-            throw new java.io.FileNotFoundException("Physical file not found on disk at: " + file.getPath());
-        }
-
         // Retrieve user details from database
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("User context not found."));
-
         // Save record to database
         Record auditRecord = new Record();
         auditRecord.setFile(file);
@@ -245,28 +259,35 @@ public class DocumentServiceImpl implements DocumentService {
         auditRecord.setAction("Downloaded");
         auditRecord.setDateAction(LocalDateTime.now());
         recordRepository.save(auditRecord);
-
+        // 1. Download file bytes directly from Cloudflare R2 bucket
+        byte[] fileBytes;
+        try {
+            software.amazon.awssdk.core.ResponseBytes<software.amazon.awssdk.services.s3.model.GetObjectResponse> objectBytes = s3Client
+                    .getObjectAsBytes(builder -> builder.bucket(bucketName).key(file.getPath()));
+            fileBytes = objectBytes.asByteArray();
+        } catch (Exception e) {
+            log.log(Level.SEVERE, "Failed to download file from Cloudflare R2 key: " + file.getPath(), e);
+            throw new java.io.FileNotFoundException("File not found on cloud storage: " + file.getPath());
+        }
         String extension = getFileExtension(file.getName()).toLowerCase();
-
-        // pdf watermarking
+        // 2. PDF Watermarking using the memory byte array
         if ("pdf".equals(extension)) {
             try {
                 String watermarkText = user.getName() + " (" + user.getEmail() + ")";
-                byte[] watermarkedBytes = addWatermarkToPdf(filePath, watermarkText);
+                byte[] watermarkedBytes = addWatermarkToPdf(fileBytes, watermarkText);
                 return new org.springframework.core.io.ByteArrayResource(watermarkedBytes);
             } catch (Exception e) {
-                log.error("Failed to apply PDF watermark, falling back to original", e);
+                log.log(Level.SEVERE, "Failed to apply PDF watermark, falling back to original", e);
             }
         }
-
-        // txt watermark
+        // 3. Plain Text (.txt) Watermarking
         if ("txt".equals(extension)) {
             try {
-                // Read the original text file content
-                String originalText = java.nio.file.Files.readString(filePath, java.nio.charset.StandardCharsets.UTF_8);
-
-                // Construct a clean security watermark header
-                String timestamp = LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                // Convert download bytes to string
+                String originalText = new String(fileBytes, java.nio.charset.StandardCharsets.UTF_8);
+                // Construct a security watermark header
+                String timestamp = LocalDateTime.now()
+                        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
                 String watermarkBanner = String.format(
                         "========================================================================\n" +
                                 "                        CONFIDENTIAL DOCUMENT\n" +
@@ -274,28 +295,22 @@ public class DocumentServiceImpl implements DocumentService {
                                 "  Download Date: %s\n" +
                                 "  WARNING: Unauthorized distribution of this file is strictly prohibited.\n" +
                                 "========================================================================\n\n",
-                        user.getName(), user.getEmail(), timestamp
-                );
-
+                        user.getName(), user.getEmail(), timestamp);
                 String watermarkedText = watermarkBanner + originalText;
-                return new org.springframework.core.io.ByteArrayResource(watermarkedText.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                return new org.springframework.core.io.ByteArrayResource(
+                        watermarkedText.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             } catch (Exception e) {
-                log.error("Failed to apply TXT watermark, falling back to original", e);
+                log.log(Level.SEVERE, "Failed to apply TXT watermark, falling back to original", e);
             }
         }
-
-        // For non-PDF/non-TXT files (like .docx, .xlsx, .pptx): original file
-        try {
-            return new org.springframework.core.io.UrlResource(filePath.toUri());
-        } catch (java.net.MalformedURLException e) {
-            throw new RuntimeException("Error loading file resource: " + e.getMessage());
-        }
+        // 4. Default fallback: Stream non-watermarked original file bytes (.docx,
+        // .xlsx, .pptx)
+        return new org.springframework.core.io.ByteArrayResource(fileBytes);
     }
 
-
-    private byte[] addWatermarkToPdf(java.nio.file.Path filePath, String watermarkText) throws IOException {
-
-        try (PDDocument document = Loader.loadPDF(filePath.toFile())) {
+    private byte[] addWatermarkToPdf(byte[] pdfBytes, String watermarkText) throws IOException {
+        // Load PDF directly from the byte array in memory (PDFBox 3.x)
+        try (PDDocument document = Loader.loadPDF(pdfBytes)) {
             for (PDPage page : document.getPages()) {
                 float width = page.getMediaBox().getWidth();
                 float height = page.getMediaBox().getHeight();
@@ -340,17 +355,19 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     public List<com.OmniDoc.backend.dto.SearchResultDto> searchDocuments(String queryText, Double alpha, int limit) {
         double filenameThreshold = 0.30; // 30% filename match threshold (Tier 1)
-        double minScoreCutoff = 0.25;    // 25% minimum combined score cutoff (Tier 3)
+        double minScoreCutoff = 0.25; // 25% minimum combined score cutoff (Tier 3)
         // Attempt Filename-only match first
-        List<ChunkRepository.SearchResultProjection> filenameMatches =
-                chunkRepository.searchByFilename(queryText, filenameThreshold);
+        List<ChunkRepository.SearchResultProjection> filenameMatches = chunkRepository.searchByFilename(queryText,
+                filenameThreshold);
         List<ChunkRepository.SearchResultProjection> finalProjections;
         if (!filenameMatches.isEmpty()) {
-            log.info(">>> [SEARCH] [TIER 1] Filename match triggered for query: '{}'. Found {} matches.", queryText, filenameMatches.size());
+            log.info(">>> [SEARCH] [TIER 1] Filename match triggered for query: '" + queryText + "'. Found "
+                    + filenameMatches.size() + " matches.");
             finalProjections = filenameMatches;
         } else {
             // Fallback to Hybrid (Semantic + Fuzzy) Search
-            log.info(">>> [SEARCH] [TIER 2] No filename match. Running Hybrid Semantic Search for: '{}'", queryText);
+            log.info(
+                    ">>> [SEARCH] [TIER 2] No filename match. Running Hybrid Semantic Search for: '" + queryText + "'");
             float[] queryVector = embeddingModel.embed(queryText).content().vector();
             String queryVectorString = Arrays.toString(queryVector);
             finalProjections = chunkRepository.searchHybrid(queryVectorString, queryText, alpha, minScoreCutoff, limit);
@@ -358,11 +375,11 @@ public class DocumentServiceImpl implements DocumentService {
         // Print scores to terminal and map to DTOs
         return finalProjections.stream()
                 .map(p -> {
-                    log.info(">>> [SEARCH MATCH] File: '{}' | Combined Score: {} (Semantic: {}, Fuzzy: {})",
-                            p.getDocName(),
-                            String.format("%.3f", p.getScore()),
-                            String.format("%.3f", p.getSemanticScore()),
-                            String.format("%.3f", p.getFuzzyScore()));
+                    log.info(">>> [SEARCH MATCH] File: '" + p.getDocName() + "' | Combined Score: " +
+                            String.format("%.3f", p.getScore()) + " (Semantic: " +
+                            String.format("%.3f", p.getSemanticScore()) + ", Fuzzy: " +
+                            String.format("%.3f", p.getFuzzyScore()) + ")");
+
                     return new com.OmniDoc.backend.dto.SearchResultDto(
                             p.getId(),
                             p.getFileId(),
@@ -370,8 +387,7 @@ public class DocumentServiceImpl implements DocumentService {
                             p.getChunkText(),
                             p.getScore(),
                             p.getSemanticScore(),
-                            p.getFuzzyScore()
-                    );
+                            p.getFuzzyScore());
                 })
                 .collect(Collectors.toList());
     }

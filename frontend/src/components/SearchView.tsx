@@ -33,7 +33,7 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
   // Fetch documents from Spring Boot backend on mount
   const fetchDocuments = async () => {
     try {
-      const response = await fetch("http://localhost:8080/api/documents");
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/documents`);
       if (response.ok) {
         const data = await response.json();
 
@@ -103,7 +103,7 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
       const deleteToastId = toast.loading(`Deleting ${name}...`);
 
       try {
-        const response = await fetch(`http://localhost:8080/api/documents/${id}?userEmail=${currentUser?.email || ""}`, {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/documents/${id}?userEmail=${currentUser?.email || ""}`, {
           method: "DELETE",
         });
 
@@ -136,7 +136,7 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
   const handleDownload = async (id: string, name: string) => {
     try {
       // 1. Verify file exists on disk first
-      const checkResponse = await fetch(`http://localhost:8080/api/documents/download/${id}/check`);
+      const checkResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/documents/download/${id}/check`);
 
       if (!checkResponse.ok) {
         const errorMsg = await checkResponse.text();
@@ -145,7 +145,7 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
       }
 
       // 2. Trigger native browser download using temporary anchor link
-      const downloadUrl = `http://localhost:8080/api/documents/download/${id}?userEmail=${currentUser?.email || ""}`;
+      const downloadUrl = `${import.meta.env.VITE_API_BASE_URL}/api/documents/download/${id}?userEmail=${currentUser?.email || ""}`;
       const link = document.createElement('a');
       link.href = downloadUrl;
       link.setAttribute('download', name);
@@ -175,7 +175,7 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
         // Trigger all delete requests concurrently to update status to INACTIVE in the database
         await Promise.all(
           docsToDelete.map(doc =>
-            fetch(`http://localhost:8080/api/documents/${doc.id}?userEmail=${currentUser?.email || ""}`, {
+            fetch(`${import.meta.env.VITE_API_BASE_URL}/api/documents/${doc.id}?userEmail=${currentUser?.email || ""}`, {
               method: "DELETE",
             })
           )
@@ -232,7 +232,7 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
     formData.append("userEmail", currentUser?.email || ""); // Dynamic email from active user context
     const uploadToastId = toast.loading(`Uploading and processing ${file.name}...`);
     try {
-      const response = await fetch("http://localhost:8080/api/documents/upload", {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/documents/upload`, {
         method: "POST",
         body: formData,
       });
@@ -287,7 +287,7 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
     const searchToastId = toast.loading(`Performing hybrid search for "${searchQuery}"...`);
     try {
       // Query our new backend search endpoint (70% Semantic, 30% Fuzzy/Filename weight, limit 5)
-      const response = await fetch(`http://localhost:8080/api/documents/search?query=${encodeURIComponent(searchQuery)}&alpha=0.7&limit=5`);
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/documents/search?query=${encodeURIComponent(searchQuery)}&alpha=0.7&limit=5`);
       if (response.ok) {
         const data = await response.json();
         setSearchResults(data);
@@ -426,159 +426,189 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
       {/* Documents Table Container */}
       <div className="flex-1 bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto">
         {isSearchActive ? (
-          // RENDER SEMANTIC CARDS FOR SEARCH RESULTS
-          <div className="flex-1 overflow-auto space-y-4 pr-1 text-left">
-            {searchResults.length === 0 ? (
-              <div className="h-64 flex flex-col items-center justify-center bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-                <FileText className="h-10 w-10 text-slate-300 mb-2" />
-                <p className="text-sm font-semibold text-slate-800">No matching documents found</p>
-                <p className="text-xs text-slate-500 mt-1">Try another concept, file name, or keyword</p>
-              </div>
-            ) : (
-              searchResults.map(result => (
-                <div key={result.id} className="bg-white border border-slate-200 p-5 rounded-xl shadow-sm hover:border-blue-300 transition-colors flex flex-col gap-3 relative">
-                  {/* File Header Details */}
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-blue-900 shrink-0" />
-                      <span className="font-bold text-slate-800 text-sm truncate max-w-md">
-                                            {highlightText(result.docName, searchQuery)}
-                                          </span>
-                    </div>
-                  </div>
-                  {/* Extracted Text Paragraph Matching Snippet */}
-                  <div className="text-xs text-slate-600 leading-relaxed bg-slate-50/50 border border-slate-100 p-3 rounded-lg whitespace-pre-wrap font-sans">
-                                    {highlightText(result.chunkText, searchQuery)}
-                                  </div>
-                  {/* Score Breakdown & Action Buttons */}
-                  <div className="flex justify-between items-center mt-1 border-t border-slate-100 pt-2 shrink-0">
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        title="View logs"
-                        onClick={() => onViewDocLogs(result.docName)}
-                        className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-slate-100 text-slate-500 hover:text-slate-700 cursor-pointer rounded-lg"
-                      >
-                        <History className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        title="Download document"
-                        onClick={() => handleDownload(result.fileId.toString(), result.docName)}
-                        className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-slate-100 text-slate-500 hover:text-slate-700 cursor-pointer rounded-lg"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        title="Delete document"
-                        onClick={() => handleDelete(result.fileId.toString(), result.docName)}
-                        className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-red-50 text-slate-500 hover:text-red-600 cursor-pointer rounded-lg"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        ) : (
-          // RENDER STANDARD FILE LIST TABLE (WHEN NOT SEARCHING)
-          <>
-            {filteredDocuments.length === 0 ? (
-              <div className="h-64 flex flex-col items-center justify-center text-center p-6">
-                <FileText className="h-10 w-10 text-slate-300 mb-2" />
-                <p className="text-sm font-semibold text-slate-800">No documents found</p>
-                <p className="text-xs text-slate-500 mt-1">Try clearing search queries or filters</p>
-              </div>
-            ) : (
-              <table className="w-full text-left border-collapse min-w-[600px]">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/50 text-[11px] font-bold text-slate-500 tracking-wider">
-                    <th className="py-3.5 px-4 w-12 text-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.length === filteredDocuments.length && filteredDocuments.length > 0}
-                        onChange={handleSelectAll}
-                        className="h-3.5 w-3.5 rounded border-slate-300 text-blue-900 focus:ring-blue-900 cursor-pointer"
-                      />
-                    </th>
-                    <th className="py-3.5 px-4">Name</th>
-                    <th className="py-3.5 px-4">Date Modified</th>
-                    <th className="py-3.5 px-4">Type</th>
-                    <th className="py-3.5 px-4">Size</th>
-                    <th className="py-3.5 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {filteredDocuments.map(doc => {
-                    const isSelected = selectedIds.includes(doc.id);
-                    return (
-                      <tr
-                        key={doc.id}
-                        className={`hover:bg-slate-50/30 transition-colors ${isSelected ? 'bg-blue-50/10' : ''}`}
-                      >
-                        <td className="py-3 px-4 text-center">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleSelectRow(doc.id)}
-                            className="h-3.5 w-3.5 rounded border-slate-300 text-blue-900 focus:ring-blue-900 cursor-pointer"
-                          />
-                        </td>
-                        <td className="py-3 px-4 font-semibold text-slate-800 truncate max-w-[200px]">
-                          {doc.name}
-                        </td>
-                        <td className="py-3 px-4 text-slate-500">
-                          {doc.dateModified}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">
-                            {doc.type}
+          // 1. RENDER SEARCH RESULTS TABLE (SAME LAYOUT AS THE HOME PAGE LIST)
+          searchResults.length === 0 ? (
+            <div className="h-64 flex flex-col items-center justify-center text-center p-6">
+              <FileText className="h-10 w-10 text-slate-300 mb-2" />
+              <p className="text-sm font-semibold text-slate-800">No matching documents found</p>
+              <p className="text-xs text-slate-500 mt-1">Try another concept, file name, or keyword</p>
+            </div>
+          ) : (
+            <table className="w-full text-left border-collapse min-w-[600px]">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/50 text-[11px] font-bold text-slate-500 tracking-wider">
+                  <th className="py-3.5 px-4 w-12 text-center"></th>
+                  <th className="py-3.5 px-4">Name</th>
+                  <th className="py-3.5 px-4">Date Modified</th>
+                  <th className="py-3.5 px-4">Type</th>
+                  <th className="py-3.5 px-4">Size</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {searchResults.map(result => {
+                  // Find file metadata dynamically from local documents list
+                  const matchedDoc = documents.find(doc => String(doc.id) === String(result.fileId));
+                  return (
+                    <tr
+                      key={result.id}
+                      className="hover:bg-slate-50/30 transition-colors"
+                    >
+                      <td className="py-3 px-4 text-center"></td>
+
+                      {/* Name Column: Shows file name + highlighted chunk text snippet underneath (if Tier 2 match) */}
+                      <td className="py-3 px-4 font-semibold text-slate-800 max-w-[400px]">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-blue-900 shrink-0" />
+                          <span className="truncate">
+                            {highlightText(result.docName, searchQuery)}
                           </span>
-                        </td>
-                        <td className="py-3 px-4 text-slate-500">
-                          {doc.size}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <div className="inline-flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              title="View logs"
-                              onClick={() => onViewDocLogs(doc.name)}
-                              className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-slate-100 text-slate-500 hover:text-slate-700 cursor-pointer rounded-lg"
-                            >
-                              <History className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              title="Download document"
-                              onClick={() => handleDownload(doc.id, doc.name)}
-                              className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-slate-100 text-slate-500 hover:text-slate-700 cursor-pointer rounded-lg"
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              title="Delete document"
-                              onClick={() => handleDelete(doc.id, doc.name)}
-                              className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-red-50 text-slate-500 hover:text-red-600 cursor-pointer rounded-lg"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                        </div>
+                        {result.semanticScore !== 0 && (
+                          <div className="text-[11px] font-normal text-slate-500 mt-1.5 leading-normal bg-slate-50/50 border border-slate-100 p-2.5 rounded-lg whitespace-pre-wrap font-sans">
+                            {highlightText(result.chunkText, searchQuery)}
                           </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4 text-slate-500">
+                        {matchedDoc ? matchedDoc.dateModified : '-'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">
+                          {matchedDoc ? matchedDoc.type : '-'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-500">
+                        {matchedDoc ? matchedDoc.size : '-'}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="inline-flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            title="View logs"
+                            onClick={() => onViewDocLogs(result.docName)}
+                            className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-slate-100 text-slate-500 hover:text-slate-700 cursor-pointer rounded-lg"
+                          >
+                            <History className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            title="Download document"
+                            onClick={() => handleDownload(result.fileId.toString(), result.docName)}
+                            className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-slate-100 text-slate-500 hover:text-slate-700 cursor-pointer rounded-lg"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            title="Delete document"
+                            onClick={() => handleDelete(result.fileId.toString(), result.docName)}
+                            className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-red-50 text-slate-500 hover:text-red-600 cursor-pointer rounded-lg"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )
+        ) : (
+          // 2. RENDER STANDARD FILE LIST TABLE (WHEN NOT SEARCHING)
+          filteredDocuments.length === 0 ? (
+            <div className="h-64 flex flex-col items-center justify-center text-center p-6">
+              <FileText className="h-10 w-10 text-slate-300 mb-2" />
+              <p className="text-sm font-semibold text-slate-800">No documents found</p>
+              <p className="text-xs text-slate-500 mt-1">Try clearing search queries or filters</p>
+            </div>
+          ) : (
+            <table className="w-full text-left border-collapse min-w-[600px]">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/50 text-[11px] font-bold text-slate-500 tracking-wider">
+                  <th className="py-3.5 px-4 w-12 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.length === filteredDocuments.length && filteredDocuments.length > 0}
+                      onChange={handleSelectAll}
+                      className="h-3.5 w-3.5 rounded border-slate-300 text-blue-900 focus:ring-blue-900 cursor-pointer"
+                    />
+                  </th>
+                  <th className="py-3.5 px-4">Name</th>
+                  <th className="py-3.5 px-4">Date Modified</th>
+                  <th className="py-3.5 px-4">Type</th>
+                  <th className="py-3.5 px-4">Size</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {filteredDocuments.map(doc => {
+                  const isSelected = selectedIds.includes(doc.id);
+                  return (
+                    <tr
+                      key={doc.id}
+                      className={`hover:bg-slate-50/30 transition-colors ${isSelected ? 'bg-blue-50/10' : ''}`}
+                    >
+                      <td className="py-3 px-4 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleSelectRow(doc.id)}
+                          className="h-3.5 w-3.5 rounded border-slate-300 text-blue-900 focus:ring-blue-900 cursor-pointer"
+                        />
+                      </td>
+                      <td className="py-3 px-4 font-semibold text-slate-800 truncate max-w-[200px]">
+                        {doc.name}
+                      </td>
+                      <td className="py-3 px-4 text-slate-500">
+                        {doc.dateModified}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">
+                          {doc.type}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-500">
+                        {doc.size}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="inline-flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            title="View logs"
+                            onClick={() => onViewDocLogs(doc.name)}
+                            className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-slate-100 text-slate-500 hover:text-slate-700 cursor-pointer rounded-lg"
+                          >
+                            <History className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            title="Download document"
+                            onClick={() => handleDownload(doc.id, doc.name)}
+                            className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-slate-100 text-slate-500 hover:text-slate-700 cursor-pointer rounded-lg"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            title="Delete document"
+                            onClick={() => handleDelete(doc.id, doc.name)}
+                            className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-red-50 text-slate-500 hover:text-red-600 cursor-pointer rounded-lg"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )
         )}
       </div>
-
     </div>
   );
 }

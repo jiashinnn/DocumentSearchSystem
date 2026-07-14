@@ -1,13 +1,13 @@
 # 📥 Document Download Module: Architecture & Watermarking Guide
 
-This guide details the complete flow of the **Document Download and Watermarking Pipeline** in OmniDoc, covering database logging, physical verification, PDFBox watermarking, plain-text header banners, and streaming file resources.
+This guide details the complete flow of the **Document Download and Watermarking Pipeline** in OmniDoc, covering database logging, Cloudflare R2 downloads, PDFBox watermarking, plain-text header banners, and streaming memory resources.
 
 ---
 
 ## 🏗️ Architectural Overview
-The download process intercepts the file download request, performs verification, dynamically applies user-specific watermarks on the fly, logs the activity, and streams the modified bytes back to the browser:
+The download process intercepts the file download request, performs verification directly against Cloudflare R2 bucket metadata, downloads the file stream, dynamically applies user-specific watermarks in-memory, logs the activity, and streams the modified bytes back to the browser:
 
-$$\text{Click Download Icon} \rightarrow \text{Fetch Check Request (200/404)} \rightarrow \text{Trigger Download URL} \rightarrow \text{Spring Controller} \rightarrow \text{Watermark Engine} \rightarrow \text{Audit Log Insert} \rightarrow \text{Stream Bytes} \rightarrow \text{Browser Save}$$
+$$\text{Click Download Icon} \rightarrow \text{headObject Check (200/404)} \rightarrow \text{Trigger Download URL} \rightarrow \text{Spring Controller} \rightarrow \text{R2 GetObject Stream} \rightarrow \text{Watermark Engine} \rightarrow \text{Audit Log Insert} \rightarrow \text{Stream Bytes} \rightarrow \text{Browser Save}$$
 
 ---
 
@@ -16,7 +16,7 @@ $$\text{Click Download Icon} \rightarrow \text{Fetch Check Request (200/404)} \r
 | Layer | File in Project | Technical Duty |
 | :--- | :--- | :--- |
 | **1. Controller** | [DocumentController.java](file:///c:/Documents/Github/DocumentSearchSystem/backend/src/main/java/com/OmniDoc/backend/controller/DocumentController.java) | Exposes file check and download endpoints. |
-| **2. Service Layer** | [DocumentServiceImpl.java](file:///c:/Documents/Github/DocumentSearchSystem/backend/src/main/java/com/OmniDoc/backend/service/impl/DocumentServiceImpl.java) | Verifies file path, applies PDFBox visual grids or TXT banners, returns Resource. |
+| **2. Service Layer** | [DocumentServiceImpl.java](file:///c:/Documents/Github/DocumentSearchSystem/backend/src/main/java/com/OmniDoc/backend/service/impl/DocumentServiceImpl.java) | Downloads bytes from R2, applies PDFBox visual grids or TXT banners, returns Resource. |
 | **3. PDFBox Engine** | `addWatermarkToPdf` helper | Iterates PDF pages and draws 9 diagonal rotated watermarks at 12% opacity. |
 | **4. Database Audit** | `records` table | Inserts a dynamic log showing the action was performed by the logged-in user. |
 | **5. Frontend Handler** | [SearchView.tsx](file:///c:/Documents/Github/DocumentSearchSystem/frontend/src/components/SearchView.tsx) | Verifies existence, triggers temporary `<a>` element click to execute browser download. |
@@ -26,20 +26,20 @@ $$\text{Click Download Icon} \rightarrow \text{Fetch Check Request (200/404)} \r
 ## 🔍 Detailed Component Analysis
 
 ### 1. Verification Checking Endpoint
-Before downloading, the frontend must verify that the physical file actually exists in the server storage. This prevents broken links or half-downloaded error pages.
+Before downloading, the frontend must verify that the file actually exists in Cloudflare R2 storage. This prevents broken links or half-downloaded error pages.
 *   **Controller mapping**: `GET /api/documents/download/{id}/check`
-*   **Action**: Fetches file metadata, reads the saved physical path, and checks if it exists using `Files.exists(path)`.
-*   **Response**: Returns `200 OK` if the file is safe to download, or `404 Not Found` with a specific error message if the file has been manually deleted or is missing from the storage disk.
+*   **Action**: Calls `s3Client.headObject()` to verify if the unique bucket key path exists in R2.
+*   **Response**: Returns `200 OK` if the file exists, or `404 Not Found` if the key is missing or invalid.
 
 ---
 
 ### 2. PDF Watermarking using Apache PDFBox 3.x
-For PDF files, we dynamically inject a **3x3 grid of 9 diagonal watermarks** on every page:
+For PDF files, we download the object as bytes, parse it in memory, and dynamically inject a **3x3 grid of 9 diagonal watermarks** on every page:
 
 #### A. Document Loading
-Instead of using the deprecated PDFBox 2.x `PDDocument.load()`, we use the PDFBox 3.x **`Loader`** class:
+Instead of using disk-based files, we read the `byte[]` array directly in memory using the PDFBox 3.x **`Loader`** class:
 ```java
-try (PDDocument document = Loader.loadPDF(filePath.toFile()))
+try (PDDocument document = Loader.loadPDF(pdfBytes))
 ```
 
 #### B. Font and Styling
@@ -73,6 +73,7 @@ try (PDDocument document = Loader.loadPDF(filePath.toFile()))
 ### 3. Plain Text Watermarking (.txt)
 Because raw text files do not support colors, rotation, or fonts, we watermark them by prepending a clean **Security Banner** directly to the top of the plain text before encoding it back to bytes:
 ```java
+String originalText = new String(fileBytes, java.nio.charset.StandardCharsets.UTF_8);
 String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
 String watermarkBanner = String.format(
     "========================================================================\n" +
@@ -88,12 +89,11 @@ String watermarkedText = watermarkBanner + originalText;
 ---
 
 ### 4. Streaming the Bytes
-We stream the bytes back using different Resource types:
-*   **For Watermarked PDFs/TXTs**: We wrap the modified memory byte array in a **`ByteArrayResource`**:
+We stream the bytes back using memory resource wrappers:
+*   **For Watermarked and Original documents**: We wrap the resulting byte array in a **`ByteArrayResource`**:
     ```java
-    return new ByteArrayResource(watermarkedBytes);
+    return new ByteArrayResource(fileBytes);
     ```
-*   **For Non-watermarked documents** (e.g. Word `.docx`): We stream the original disk file directly using a **`UrlResource`** to preserve formatting.
 
 ---
 
@@ -108,4 +108,4 @@ We stream the bytes back using different Resource types:
     link.click();
     link.remove();
     ```
-3.  **Naming Duplication**: When downloading, the browser receives the header `Content-Disposition: attachment; filename="..."`. If the user already has the same file in their local Windows downloads folder, the **browser natively handles duplication by appending `(1)`, `(2)`, etc. to the filename** without crashing.
+3.  **Naming Duplication**: When downloading, the browser receives the header `Content-Disposition: attachment; filename="..."` with the original display name from the database. The browser natively handles local file duplication (e.g. appending `(1)`).

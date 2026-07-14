@@ -5,18 +5,28 @@ import com.OmniDoc.backend.entity.File;
 import com.OmniDoc.backend.mapper.FileMapper;
 import com.OmniDoc.backend.service.DocumentService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
 @RestController
 @RequestMapping("/api/documents")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = "${app.cors.allowed-origins}")
 public class DocumentController {
 
     @Autowired
     private DocumentService documentService;
+
+    @Autowired
+    private S3Client s3Client;
+
+    @Value("${r2.bucket-name}")
+    private String bucketName;
+
 
     @PostMapping("/upload")
     public ResponseEntity<?> uploadFile(
@@ -67,17 +77,18 @@ public class DocumentController {
     public ResponseEntity<?> checkFileExists(@PathVariable("id") Long id) {
         try {
             File file = documentService.getFileById(id);
-            java.nio.file.Path filePath = java.nio.file.Paths.get(file.getPath());
-            if (!java.nio.file.Files.exists(filePath)) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body("Physical file does not exist on server storage.");
-            }
+            // Verify if the object exists in Cloudflare R2 using headObject metadata request
+            s3Client.headObject(builder -> builder.bucket(bucketName).key(file.getPath()));
             return ResponseEntity.ok().build();
+        } catch (NoSuchKeyException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body("Physical file does not exist on Cloudflare R2 storage.");
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body("Document metadata not found in database.");
         }
     }
+
 
     @GetMapping("/download/{id}")
     public ResponseEntity<?> downloadFile(
@@ -110,8 +121,8 @@ public class DocumentController {
             if (query == null || query.trim().isEmpty()) {
                 return ResponseEntity.badRequest().body("Search query text cannot be empty.");
             }
-            java.util.List<com.OmniDoc.backend.dto.SearchResultDto> results =
-                    documentService.searchDocuments(query, alpha, limit);
+            java.util.List<com.OmniDoc.backend.dto.SearchResultDto> results = documentService.searchDocuments(query,
+                    alpha, limit);
             return ResponseEntity.ok(results);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

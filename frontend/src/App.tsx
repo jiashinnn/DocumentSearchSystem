@@ -52,7 +52,7 @@ export default function App() {
 
   const fetchHistoryLogs = async () => {
     try {
-      const response = await fetch("http://localhost:8080/api/documents/history");
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/documents/history`);
       if (response.ok) {
         const data = await response.json();
 
