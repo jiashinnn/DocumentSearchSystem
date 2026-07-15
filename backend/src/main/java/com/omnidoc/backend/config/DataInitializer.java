@@ -19,7 +19,7 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
 
-        // 1. Seed the default test employee if missing
+        // Seed the default test employee if missing
         if (userRepository.findByEmail("name@company.com").isEmpty()) {
             User employee = new User();
             employee.setEmail("name@company.com");
@@ -29,7 +29,7 @@ public class DataInitializer implements CommandLineRunner {
             userRepository.save(employee);
         }
 
-        // 2. Seed a new admin user if missing
+        // Seed a new admin user if missing
         if (userRepository.findByEmail("admin@company.com").isEmpty()) {
             User admin = new User();
             admin.setEmail("admin@company.com");

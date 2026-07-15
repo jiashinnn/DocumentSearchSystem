@@ -19,13 +19,13 @@ public interface ChunkRepository extends JpaRepository<Chunk,Long> {
     @Query(value = "INSERT INTO chunks (file_id, chunk_text, embedding) VALUES (:fileId, :text, cast(:vector as vector))", nativeQuery = true)
     void saveVectorChunk(@Param("fileId") Long fileId, @Param("text") String text, @Param("vector") String vector);
 
-    // Directly match search query to filename using Trigrams
+    // Filename Search
     @Query(value = "SELECT * FROM (" +
             "  SELECT DISTINCT ON (f.id)" +
             "         c.id as id, c.file_id as fileId, f.name as docName, c.chunk_text as chunkText, " +
             "         0.0 as semanticScore, " +
-            "         similarity(f.name, :queryText) as fuzzyScore, " +
-            "         similarity(f.name, :queryText) as score " +
+            "         greatest(similarity(f.name, :queryText), similarity(regexp_replace(f.name, '\\.[^.]+$', ''), :queryText)) as fuzzyScore, " +
+            "         greatest(similarity(f.name, :queryText), similarity(regexp_replace(f.name, '\\.[^.]+$', ''), :queryText)) as score " +
             "  FROM chunks c " +
             "  JOIN files f ON c.file_id = f.id " +
             "  WHERE f.status = 'ACTIVE' " +
@@ -39,14 +39,14 @@ public interface ChunkRepository extends JpaRepository<Chunk,Long> {
             @Param("queryText") String queryText,
             @Param("threshold") Double threshold);
 
-    // Fallback Hybrid Search with Minimum Score Cutoff
+    // Hybrid Search
     @Query(value = "SELECT * FROM (" +
             "  SELECT DISTINCT ON (f.id)" +
             "         c.id as id, c.file_id as fileId, f.name as docName, c.chunk_text as chunkText, " +
             "         (1 - (c.embedding <=> cast(:queryVector as vector))) as semanticScore, " +
-            "         ((0.7 * similarity(f.name, :queryText)) + (0.3 * similarity(c.chunk_text, :queryText))) as fuzzyScore, " +
+            "         ((0.7 * greatest(similarity(f.name, :queryText), similarity(regexp_replace(f.name, '\\.[^.]+$', ''), :queryText))) + (0.3 * similarity(c.chunk_text, :queryText))) as fuzzyScore, " +
             "         ((:alpha * (1 - (c.embedding <=> cast(:queryVector as vector)))) + " +
-            "          ((1 - :alpha) * ((0.7 * similarity(f.name, :queryText)) + (0.3 * similarity(c.chunk_text, :queryText))))) as score " +
+            "          ((1 - :alpha) * ((0.7 * greatest(similarity(f.name, :queryText), similarity(regexp_replace(f.name, '\\.[^.]+$', ''), :queryText))) + (0.3 * similarity(c.chunk_text, :queryText))))) as score " +
             "  FROM chunks c " +
             "  JOIN files f ON c.file_id = f.id " +
             "  WHERE f.status = 'ACTIVE' " +
@@ -56,6 +56,7 @@ public interface ChunkRepository extends JpaRepository<Chunk,Long> {
             "ORDER BY score DESC " +
             "LIMIT :limitSize",
             nativeQuery = true)
+
     List<SearchResultProjection> searchHybrid(
             @Param("queryVector") String queryVector,
             @Param("queryText") String queryText,

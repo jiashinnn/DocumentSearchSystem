@@ -426,7 +426,7 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
       {/* Documents Table Container */}
       <div className="flex-1 bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto">
         {isSearchActive ? (
-          // 1. RENDER SEARCH RESULTS TABLE (SAME LAYOUT AS THE HOME PAGE LIST)
+          // RENDER SEARCH RESULTS TABLE 
           searchResults.length === 0 ? (
             <div className="h-64 flex flex-col items-center justify-center text-center p-6">
               <FileText className="h-10 w-10 text-slate-300 mb-2" />
@@ -454,10 +454,10 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
                       key={result.id}
                       className="hover:bg-slate-50/30 transition-colors"
                     >
-                      <td className="py-3 px-4 text-center"></td>
+                      <td className="py-3 px-4 text-center align-top"></td>
 
-                      {/* Name Column: Shows file name + highlighted chunk text snippet underneath (if Tier 2 match) */}
-                      <td className="py-3 px-4 font-semibold text-slate-800 max-w-[400px]">
+                      {/* Layer 2 */}
+                      <td className="py-3 px-4 font-semibold text-slate-800 max-w-[400px] align-top">
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4 text-blue-900 shrink-0" />
                           <span className="truncate">
@@ -471,18 +471,18 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
                         )}
                       </td>
 
-                      <td className="py-3 px-4 text-slate-500">
+                      <td className="py-3 px-4 text-slate-500 align-top">
                         {matchedDoc ? matchedDoc.dateModified : '-'}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 align-top">
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">
                           {matchedDoc ? matchedDoc.type : '-'}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-slate-500">
+                      <td className="py-3 px-4 text-slate-500 align-top">
                         {matchedDoc ? matchedDoc.size : '-'}
                       </td>
-                      <td className="py-3 px-4 text-right">
+                      <td className="py-3 px-4 text-right align-top">
                         <div className="inline-flex items-center gap-1">
                           <Button
                             variant="ghost"
@@ -517,7 +517,7 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
             </table>
           )
         ) : (
-          // 2. RENDER STANDARD FILE LIST TABLE (WHEN NOT SEARCHING)
+          // RENDER STANDARD FILE LIST TABLE (WHEN NOT SEARCHING)
           filteredDocuments.length === 0 ? (
             <div className="h-64 flex flex-col items-center justify-center text-center p-6">
               <FileText className="h-10 w-10 text-slate-300 mb-2" />
