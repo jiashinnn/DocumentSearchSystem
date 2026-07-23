@@ -115,7 +115,7 @@ public class DocumentController {
     @GetMapping("/search")
     public ResponseEntity<?> searchDocuments(
             @RequestParam("query") String query,
-            @RequestParam(value = "alpha", defaultValue = "0.7") Double alpha,
+            @RequestParam(value = "alpha", defaultValue = "0.3") Double alpha,
             @RequestParam(value = "limit", defaultValue = "5") int limit) {
         try {
             if (query == null || query.trim().isEmpty()) {
