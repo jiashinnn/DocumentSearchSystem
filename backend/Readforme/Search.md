@@ -5,9 +5,9 @@ This guide details the complete design, query mechanisms, and execution flow of 
 ---
 
 ## 🏗️ Architectural Overview
-OmniDoc implements a robust, two-tiered search pipeline. If a search query strongly matches a document title, it directly returns those matches (Tier 1). Otherwise, it falls back to a hybrid algorithm combining semantic vector similarity with text chunk fuzzy similarity (Tier 2):
+OmniDoc implements a robust, two-tiered search pipeline. If a search query strongly matches a document title, it directly returns those matches (Tier 1). Otherwise, it falls back to a hybrid algorithm combining semantic vector similarity with text chunk word-similarity (Tier 2):
 
-$$\text{Search Input} \rightarrow \text{Vite Client (Fetch)} \rightarrow \text{Spring Controller} \rightarrow \text{Embed Search Query (MiniLM)} \rightarrow \text{PostgreSQL (Trigram/pgvector)} \rightarrow \text{Merged Rank DTOs} \rightarrow \text{Search UI Grid}$$
+$$\text{Search Input} \rightarrow \text{Vite Client (Fetch)} \rightarrow \text{Spring Controller} \rightarrow \text{Embed Search Query (MiniLM)} \rightarrow \text{PostgreSQL (word\_similarity/pgvector)} \rightarrow \text{Merged Rank DTOs} \rightarrow \text{Search UI Grid}$$
 
 ---
 
@@ -28,7 +28,7 @@ $$\text{Search Input} \rightarrow \text{Vite Client (Fetch)} \rightarrow \text{S
 ### 1. Database Configuration
 To enable the dual text and vector indexing:
 *   **pgvector Extension**: Loaded to support the 384-dimension `embedding` column (using `AllMiniLmL6V2EmbeddingModel`).
-*   **pg_trgm Extension**: Enabled (`CREATE EXTENSION IF NOT EXISTS pg_trgm;`) to support Trigram-based fuzzy string similarity matching on document names and chunk texts.
+*   **pg_trgm Extension**: Enabled (`CREATE EXTENSION IF NOT EXISTS pg_trgm;`) to support Trigram-based string similarity matching on document names and substring matches on chunk texts.
 
 ---
 
@@ -42,8 +42,8 @@ We utilize native PostgreSQL queries to calculate both fuzzy string similarities
         "  SELECT DISTINCT ON (f.id)" +
         "         c.id as id, c.file_id as fileId, f.name as docName, c.chunk_text as chunkText, " +
         "         0.0 as semanticScore, " +
-        "         similarity(f.name, :queryText) as fuzzyScore, " +
-        "         similarity(f.name, :queryText) as score " +
+        "         greatest(similarity(f.name, :queryText), similarity(regexp_replace(f.name, '\\.[^.]+$', ''), :queryText)) as fuzzyScore, " +
+        "         greatest(similarity(f.name, :queryText), similarity(regexp_replace(f.name, '\\.[^.]+$', ''), :queryText)) as score " +
         "  FROM chunks c " +
         "  JOIN files f ON c.file_id = f.id " +
         "  WHERE f.status = 'ACTIVE' " +
@@ -56,7 +56,7 @@ List<SearchResultProjection> searchByFilename(
         @Param("queryText") String queryText,
         @Param("threshold") Double threshold);
 ```
-*   **Mechanic**: Computes `similarity(f.name, :queryText)` using trigrams. If the match score exceeds the threshold (default: `0.30` or 30%), the document is matched instantly by title.
+*   **Mechanic**: Computes `similarity(f.name, :queryText)` using trigrams. It takes the best similarity between the full filename and the base filename (excluding file type extensions) via `greatest` and `regexp_replace`. If the match score exceeds the threshold (default: `0.30` or 30%), the document is matched instantly by title.
 
 #### Tier 2: Hybrid Content & Semantic Search (`searchHybrid`)
 ```java
@@ -64,9 +64,9 @@ List<SearchResultProjection> searchByFilename(
         "  SELECT DISTINCT ON (f.id)" +
         "         c.id as id, c.file_id as fileId, f.name as docName, c.chunk_text as chunkText, " +
         "         (1 - (c.embedding <=> cast(:queryVector as vector))) as semanticScore, " +
-        "         ((0.7 * similarity(f.name, :queryText)) + (0.3 * similarity(c.chunk_text, :queryText))) as fuzzyScore, " +
+        "         word_similarity(:queryText, c.chunk_text) as fuzzyScore, " +
         "         ((:alpha * (1 - (c.embedding <=> cast(:queryVector as vector)))) + " +
-        "          ((1 - :alpha) * ((0.7 * similarity(f.name, :queryText)) + (0.3 * similarity(c.chunk_text, :queryText))))) as score " +
+        "          ((1 - :alpha) * word_similarity(:queryText, c.chunk_text))) as score " +
         "  FROM chunks c " +
         "  JOIN files f ON c.file_id = f.id " +
         "  WHERE f.status = 'ACTIVE' " +
@@ -74,8 +74,7 @@ List<SearchResultProjection> searchByFilename(
         ") sub " +
         "WHERE score >= :minScore " +
         "ORDER BY score DESC " +
-        "LIMIT :limitSize",
-        nativeQuery = true)
+        "LIMIT :limitSize", nativeQuery = true)
 List<SearchResultProjection> searchHybrid(
         @Param("queryVector") String queryVector,
         @Param("queryText") String queryText,
@@ -84,11 +83,10 @@ List<SearchResultProjection> searchHybrid(
         @Param("limitSize") int limitSize);
 ```
 *   **Semantic Score**: Computed as the cosine similarity `1 - (c.embedding <=> cast(:queryVector as vector))`.
-*   **Fuzzy Score**: A weighted combination of title match similarity and content chunk similarity:
-    $$\text{Fuzzy Score} = 0.7 \times \text{similarity(file\_name, query)} + 0.3 \times \text{similarity(chunk\_text, query)}$$
+*   **Fuzzy Score**: Calculated using `word_similarity(:queryText, c.chunk_text)`. This performs substring trigram matching, ensuring high scores when search keywords match words inside a long paragraph (dampening length mismatch effects). Title matching is excluded in Tier 2 to prevent title matching from drowning out relevant content chunk matches.
 *   **Combined Score**: Linearly interpolates the Semantic and Fuzzy scores based on parameter $\alpha$:
     $$\text{Score} = \alpha \times \text{Semantic Score} + (1 - \alpha) \times \text{Fuzzy Score}$$
-    *(By default, $\alpha = 0.7$ gives high precedence to the semantic vector logic).*
+    *(By default, $\alpha = 0.3$ gives precedence to the exact word matching, with a 30% weight assisting from the semantic vector logic).*
 
 ---
 
@@ -99,7 +97,7 @@ When the `searchDocuments` service method is executed:
 2.  **Tier 2 Execution**: If no matches are found, it generates a query vector embedding (using `AllMiniLmL6V2EmbeddingModel`) and sends it to the custom hybrid database search.
 3.  **Result Projection Mapping**: Projects matching rows to `SearchResultDto` objects, logging details to the console:
     ```
-    >>> [SEARCH MATCH] File: 'Resume.pdf' | Combined Score: 0.785 (Semantic: 0.812, Fuzzy: 0.722)
+    >>> [SEARCH MATCH] File: 'Resume.pdf' | Combined Score: 0.940 (Semantic: 0.800, Fuzzy: 1.000)
     ```
 
 ---
@@ -108,7 +106,7 @@ When the `searchDocuments` service method is executed:
 Exposes the `/api/documents/search` endpoint via GET.
 *   **Input parameters**:
     *   `query` (required): The search terms.
-    *   `alpha` (default `0.7`): Control parameter weighting semantic search vs text trigram matching.
+    *   `alpha` (default `0.3`): Control parameter weighting semantic search vs text trigram matching.
     *   `limit` (default `5`): Maximum matches to return.
 *   Returns `200 OK` with a JSON array of `SearchResultDto`.
 
@@ -119,7 +117,7 @@ The frontend binds the UI search actions directly to the hybrid search pipeline:
 *   **Trigger**: Pressing `Enter` in the search bar or typing keywords triggers the `executeSearch()` function.
 *   **API Dispatch**:
     ```typescript
-    const response = await fetch(`http://localhost:8080/api/documents/search?query=${encodeURIComponent(searchQuery)}&alpha=0.7&limit=5`);
+    const response = await fetch(`http://localhost:8080/api/documents/search?query=${encodeURIComponent(searchQuery)}&alpha=0.3&limit=5`);
     ```
 *   **Snippet Rendering**: Renders search results matching the payload. If the match contains chunk snippets (Tier 2/3), it presents the text segment directly under the document name.
 *   **Text Highlighting**: The client runs a regular expression splitter (`highlightText()`) that wraps keywords found in the title or the text snippet in a yellow `<mark>` badge for improved readability.

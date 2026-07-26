@@ -20,9 +20,10 @@ interface DocumentItem {
 
 interface SearchViewProps {
   onAddHistoryLog: (docName: string, action: string) => void;
-  onViewDocLogs: (docName: string) => void;
+  onViewDocLogs: (fileId: string, docName: string) => void;
   currentUser: { email: string; name: string } | null;
 }
+
 
 export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser }: SearchViewProps) {
   const [documents, setDocuments] = useState<DocumentItem[]>([]); // Initialized empty
@@ -219,62 +220,74 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    const file = files[0];
-    const extension = file.name.split('.').pop()?.toLowerCase() || '';
-    // 1. Frontend Check: Reject non-text files like .exe
     const allowedExtensions = ['txt', 'pdf', 'docx', 'xlsx', 'pptx'];
-    if (!allowedExtensions.includes(extension)) {
-      toast.error("Only text-based files (.txt, .pdf, .docx, .xlsx, .pptx) are allowed!");
+    const fileList = Array.from(files);
+    // Check file
+    const validFiles: File[] = [];
+    for (const file of fileList) {
+      const extension = file.name.split('.').pop()?.toLowerCase() || '';
+      if (!allowedExtensions.includes(extension)) {
+        toast.error(`Skipped "${file.name}": Only text-based files (.txt, .pdf, .docx, .xlsx, .pptx) are allowed!`);
+      } else {
+        // @ts-ignore (HTML File object maps to TypeScript File type)
+        validFiles.push(file);
+      }
+    }
+    if (validFiles.length === 0) {
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("userEmail", currentUser?.email || ""); // Dynamic email from active user context
-    const uploadToastId = toast.loading(`Uploading and processing ${file.name}...`);
-    try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/documents/upload`, {
-        method: "POST",
-        body: formData,
-      });
-      if (response.ok) {
-        const uploadedFile = await response.json();
 
-        // Format size from bytes to KB/MB
-        const displaySize = uploadedFile.size > 1024 * 1024
-          ? (uploadedFile.size / (1024 * 1024)).toFixed(1) + " MB"
-          : (uploadedFile.size / 1024).toFixed(1) + " KB";
-        const newDoc: DocumentItem = {
-          id: uploadedFile.id.toString(),
-          name: uploadedFile.name,
-          dateModified: new Date(uploadedFile.createdAt).toLocaleString('en-GB', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-          }),
-          type: extension.toUpperCase(),
-          size: displaySize,
-          logs: []
-        };
-        setDocuments(prev => [newDoc, ...prev]);
-        onAddHistoryLog(file.name, 'Uploaded');
-
+    // one by one process file
+    for (const file of validFiles) {
+      const extension = file.name.split('.').pop()?.toLowerCase() || '';
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("userEmail", currentUser?.email || "");
+      const uploadToastId = toast.loading(`Uploading and processing ${file.name}...`);
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/documents/upload`, {
+          method: "POST",
+          body: formData,
+        });
+        if (response.ok) {
+          const uploadedFile = await response.json();
+          // Format file size
+          const displaySize = uploadedFile.size > 1024 * 1024
+            ? (uploadedFile.size / (1024 * 1024)).toFixed(1) + " MB"
+            : (uploadedFile.size / 1024).toFixed(1) + " KB";
+          const newDoc: DocumentItem = {
+            id: uploadedFile.id.toString(),
+            name: uploadedFile.name,
+            dateModified: new Date(uploadedFile.createdAt).toLocaleString('en-GB', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            }),
+            type: extension.toUpperCase(),
+            size: displaySize,
+            logs: []
+          };
+          // Update local state
+          setDocuments(prev => [newDoc, ...prev]);
+          onAddHistoryLog(file.name, 'Uploaded');
+          toast.dismiss(uploadToastId);
+          toast.success(`"${file.name}" uploaded and vectorized successfully.`);
+        } else {
+          const errorText = await response.text();
+          toast.dismiss(uploadToastId);
+          toast.error(`Failed to upload "${file.name}": ${errorText || "Upload failed."}`);
+        }
+      } catch (error) {
+        console.error("Upload error:", error);
         toast.dismiss(uploadToastId);
-        toast.success("File uploaded and vectorized successfully.");
-      } else {
-        const errorText = await response.text();
-        toast.dismiss(uploadToastId);
-        toast.error(errorText || "Upload failed.");
+        toast.error(`Unable to connect to upload server for "${file.name}".`);
       }
-    } catch (error) {
-      console.error("Upload error:", error);
-      toast.dismiss(uploadToastId);
-      toast.error("Unable to connect to upload server.");
-    } finally {
-      // Clear input
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+    // Clear input and allow same filename
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const uniqueTypes = ['All', ...Array.from(new Set(documents.map(doc => doc.type)))];
@@ -394,6 +407,7 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
         <div className="shrink-0 w-full sm:w-auto">
           <input
             type="file"
+            multiple
             ref={fileInputRef}
             onChange={handleFileChange}
             className="hidden"
@@ -496,7 +510,7 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
                           <Button
                             variant="ghost"
                             title="View logs"
-                            onClick={() => onViewDocLogs(result.docName)}
+                            onClick={() => onViewDocLogs(result.fileId.toString(), result.docName)}
                             className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-slate-100 text-slate-500 hover:text-slate-700 cursor-pointer rounded-lg"
                           >
                             <History className="h-3.5 w-3.5" />
@@ -587,7 +601,7 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
                           <Button
                             variant="ghost"
                             title="View logs"
-                            onClick={() => onViewDocLogs(doc.name)}
+                            onClick={() => onViewDocLogs(doc.id, doc.name)}
                             className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-slate-100 text-slate-500 hover:text-slate-700 cursor-pointer rounded-lg"
                           >
                             <History className="h-3.5 w-3.5" />

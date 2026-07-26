@@ -7,7 +7,7 @@ This document provides a detailed breakdown of the Hybrid Search algorithm used 
 ## 🏗️ Overall Search Architecture
 OmniDoc's search is divided into **two tiers**:
 1. **Tier 1 (Filename Fuzzy Match)**: Tries to match the search query against the **document name** first. If a match exceeds the similarity threshold (default `0.30`), the matches are returned instantly, bypassing the expensive semantic computation.
-2. **Tier 2 (Hybrid Semantic Search)**: If the filename search finds no matches, the system falls back to a **Hybrid Search** on the document content. This combines **MiniLM vector semantic similarity** with **PostgreSQL Trigram text similarity** of the content chunks, weighting the two results to produce a final Score.
+2. **Tier 2 (Hybrid Semantic Search)**: If the filename search finds no matches, the system falls back to a **Hybrid Search** on the document content. This combines **MiniLM vector semantic similarity** with **PostgreSQL Word Trigram similarity** of the content chunks, weighting the two results to produce a final Score.
 
 ---
 
@@ -24,19 +24,21 @@ The PostgreSQL `pg_trgm` extension splits strings into **3-character sequences (
 
 ---
 
-### 2. Semantic Similarity: pgvector Cosine Similarity (`<=>`)
+### 2. Word Similarity (`word_similarity`)
+To match a short keyword inside a large chunk of text without diluting the similarity score, PostgreSQL provides `word_similarity(parameter, target)`.
+* **Formula**: It computes the maximum similarity score between the first string (the query) and any substring of the second string (the chunk text).
+* **Why it's necessary**: Standard `similarity()` compares the whole text, which yields extremely low scores (close to 0) when comparing a short query (e.g., `"aws"`) against a long paragraph. `word_similarity` focuses on the best-matching region, yielding a score of `1.0` if the query matches a word inside the paragraph.
+* **Range**: `0.0` to `1.0`.
+
+---
+
+### 3. Semantic Similarity: pgvector Cosine Similarity (`<=>`)
 We generate **384-dimensional dense vectors** from text chunks and user queries using the local `AllMiniLmL6V2EmbeddingModel`.
 * **Vector Distance**: The `<=>` operator in pgvector represents **Cosine Distance**.
 * **Cosine Similarity**: Since distance decreases as similarity increases, we compute the similarity score as:
   $$\text{SemanticScore} = 1 - (A \Leftrightarrow B)$$
 * **Range**: `0.0` to `1.0`.
-
----
-
-### 3. Text Fuzzy Similarity (Fuzzy Score - Tier 2)
-In Tier 2, the fuzzy text similarity is calculated directly against the content chunks:
-$$\text{FuzzyScore} = \text{similarity(c.chunk\_text, query)}$$
-* *Note: Filename similarity is excluded in Tier 2 to prevent title keywords from dominating content matches when searching inside files.*
+* **Note**: Unlike text similarity, vector embeddings are normalized to unit vectors. Therefore, semantic search does not suffer from length mismatch issues; conceptual matches are scored accurately regardless of document length.
 
 ---
 
@@ -45,7 +47,7 @@ The final ranking score merges the **Semantic Score** and the **Fuzzy Score** us
 $$\text{Combined Score} = \alpha \times \text{SemanticScore} + (1 - \alpha) \times \text{FuzzyScore}$$
 * **$\alpha$ (Alpha)**: Defaults to `0.3`. This means:
   * **30%** of the score is based on **semantic matching** (contextual/conceptual meaning).
-  * **70%** of the score is based on **keyword matching** (exact/fuzzy text matching of the content chunks).
+  * **70%** of the score is based on **keyword matching** (exact/fuzzy text matching of the content chunks via `word_similarity`).
 
 ---
 
@@ -65,11 +67,11 @@ SELECT * FROM (
          (1 - (c.embedding <=> cast(:queryVector as vector))) as semanticScore, 
          
          -- 3. Calculates Fuzzy text score of the content chunk
-         similarity(c.chunk_text, :queryText) as fuzzyScore, 
+         word_similarity(:queryText, c.chunk_text) as fuzzyScore, 
          
          -- 4. Merges scores: Alpha * SemanticScore + (1 - Alpha) * FuzzyScore (e.g. 0.3 * Semantic + 0.7 * Fuzzy)
          ((:alpha * (1 - (c.embedding <=> cast(:queryVector as vector)))) + 
-          ((1 - :alpha) * similarity(c.chunk_text, :queryText))) as score 
+          ((1 - :alpha) * word_similarity(:queryText, c.chunk_text))) as score 
   FROM chunks c 
   JOIN files f ON c.file_id = f.id 
   WHERE f.status = 'ACTIVE' 
@@ -88,13 +90,13 @@ Assume we have the following document:
 * **File A**: `aws_architecture.pdf`
 * **Content Chunk**: "Amazon Web Services EC2 runs virtual servers..."
 
-User searches: **"aws ec2"** (with default parameters: $\alpha = 0.3$, `minScore = 0.25`)
+User searches: **"aws"** (with default parameters: $\alpha = 0.3$, `minScore = 0.25`)
 
 ### Calculation for File A:
-1. **Semantic Score (`SemanticScore`)**: The query "aws ec2" and the text "Amazon Web Services EC2 runs..." are contextually very similar. Cosine similarity calculates to **`0.85`**.
-2. **Chunk Similarity (`FuzzyScore`)**: The fuzzy trigram similarity `similarity('Amazon Web Services EC2 runs virtual servers...', 'aws ec2')` returns **`0.20`**.
+1. **Semantic Score (`SemanticScore`)**: The query "aws" and the text "Amazon Web Services..." are contextually very similar. Cosine similarity calculates to **`0.80`**.
+2. **Chunk Similarity (`FuzzyScore`)**: The word similarity `word_similarity('aws', 'Amazon Web Services EC2...')` finds a perfect match with the substring `'AWS'` and returns **`1.0`**.
 3. **Combined Score Calculation**:
-   $$\text{Combined Score} = 0.3 \times 0.85 + 0.7 \times 0.20 = 0.255 + 0.14 = 0.395$$
+   $$\text{Combined Score} = 0.3 \times 0.80 + 0.7 \times 1.0 = 0.24 + 0.70 = 0.94$$
 
 ### Final Result:
-File A's combined score of `0.395` is greater than the `0.25` threshold, so it will be returned to the frontend and highlighted.
+File A's combined score of `0.94` is greater than the `0.25` threshold, so it will be returned to the frontend and highlighted.

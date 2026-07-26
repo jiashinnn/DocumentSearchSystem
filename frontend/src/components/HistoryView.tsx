@@ -3,6 +3,7 @@ import { Search, History, Filter, ArrowLeft, ChevronLeft, ChevronRight, Chevrons
 
 interface AuditLogItem {
   id: string;
+  fileId: string | null;
   docName: string;
   action: string;
   user: string;
@@ -11,11 +12,13 @@ interface AuditLogItem {
 
 interface HistoryViewProps {
   logs: AuditLogItem[];
+  selectedDocId?: string | null;
   selectedDocName?: string | null;
   onBack?: () => void;
 }
 
-export default function HistoryView({ logs, selectedDocName, onBack }: HistoryViewProps) {
+
+export default function HistoryView({ logs, selectedDocId, selectedDocName, onBack }: HistoryViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAction, setSelectedAction] = useState('All');
 
@@ -23,9 +26,10 @@ export default function HistoryView({ logs, selectedDocName, onBack }: HistoryVi
   const [pageSize, setPageSize] = useState(20);
 
   // Filter logs by specific document if provided
-  const targetLogs = selectedDocName
-    ? logs.filter(log => log.docName.toLowerCase() === selectedDocName.toLowerCase())
+  const targetLogs = selectedDocId
+    ? logs.filter(log => log.fileId === selectedDocId)
     : logs;
+
 
   const filteredLogs = targetLogs.filter(log => {
     // If viewing single doc, search text filters on User or Action instead of docName

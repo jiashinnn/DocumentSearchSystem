@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/sonner";
 
 interface AuditLogItem {
   id: string;
+  fileId: string | null;
   docName: string;
   action: string;
   user: string;
@@ -19,16 +20,20 @@ export default function App() {
   const [view, setView] = useState<'landing' | 'search'>('landing');
   const [searchTab, setSearchTab] = useState<'home' | 'history' | 'doc-logs'>('home');
   const [historyLogs, setHistoryLogs] = useState<AuditLogItem[]>([]);
+  const [selectedDocIdForLogs, setSelectedDocIdForLogs] = useState<string | null>(null);
   const [selectedDocNameForLogs, setSelectedDocNameForLogs] = useState<string | null>(null);
+
 
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to log out?")) {
       setView('landing');
       setSearchTab('home');
+      setSelectedDocIdForLogs(null); // Reset
       setSelectedDocNameForLogs(null);
       setCurrentUser(null);
     }
   };
+
 
   const handleAddHistoryLog = (docName: string, action: string) => {
     const pad = (num: number) => num.toString().padStart(2, '0');
@@ -37,6 +42,7 @@ export default function App() {
 
     const newLog: AuditLogItem = {
       id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
+      fileId: null,
       docName,
       action,
       user: currentUser?.email || "",
@@ -45,10 +51,12 @@ export default function App() {
     setHistoryLogs(prev => [newLog, ...prev]);
   };
 
-  const handleViewDocLogs = (docName: string) => {
+  const handleViewDocLogs = (fileId: string, docName: string) => {
+    setSelectedDocIdForLogs(fileId);
     setSelectedDocNameForLogs(docName);
     setSearchTab('doc-logs');
   };
+
 
   const fetchHistoryLogs = async () => {
     try {
@@ -59,6 +67,7 @@ export default function App() {
         // Map backend RecordDto to frontend AuditLogItem structure
         const mappedLogs: AuditLogItem[] = data.map((log: any) => ({
           id: log.id.toString(),
+          fileId: log.fileId ? log.fileId.toString() : null, // Mapped here
           docName: log.docName,
           action: log.action,
           user: log.userEmail,
@@ -70,6 +79,7 @@ export default function App() {
             minute: '2-digit'
           })
         }));
+
 
         setHistoryLogs(mappedLogs);
       }
@@ -112,13 +122,16 @@ export default function App() {
         ) : (
           <HistoryView
             logs={historyLogs}
+            selectedDocId={selectedDocIdForLogs} // Passed
             selectedDocName={selectedDocNameForLogs}
             onBack={() => {
               setSearchTab('home');
+              setSelectedDocIdForLogs(null);
               setSelectedDocNameForLogs(null);
             }}
           />
         )}
+
       </main>
 
       <Footer />

@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class RecordDto {
     private Long id;
+    private Long fileId;
     private String docName;
     private String action;
     private String userEmail;

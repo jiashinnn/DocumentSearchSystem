@@ -42,13 +42,14 @@ public interface ChunkRepository extends JpaRepository<Chunk, Long> {
 
         // Hybrid Search
         @Query(value = "SELECT * FROM (" +
-                        "  SELECT DISTINCT ON (f.id)" +
-                        "         c.id as id, c.file_id as fileId, f.name as docName, c.chunk_text as chunkText, " +
-                        "         (1 - (c.embedding <=> cast(:queryVector as vector))) as semanticScore, " + // 语义分数
-                        "         similarity(c.chunk_text, :queryText) as fuzzyScore, " + // 只看内容文本，不看文件名
-                        "         ((:alpha * (1 - (c.embedding <=> cast(:queryVector as vector)))) + " +
-                        "          ((1 - :alpha) * similarity(c.chunk_text, :queryText))) as score " + // 混合公式
-                        "  FROM chunks c " +
+            "  SELECT DISTINCT ON (f.id)" +
+            "         c.id as id, c.file_id as fileId, f.name as docName, c.chunk_text as chunkText, " +
+            "         (1 - (c.embedding <=> cast(:queryVector as vector))) as semanticScore, " +
+            "         word_similarity(:queryText, c.chunk_text) as fuzzyScore, " +
+            "         ((:alpha * (1 - (c.embedding <=> cast(:queryVector as vector)))) + " +
+            "          ((1 - :alpha) * word_similarity(:queryText, c.chunk_text))) as score " +
+
+            "  FROM chunks c " +
                         "  JOIN files f ON c.file_id = f.id " +
                         "  WHERE f.status = 'ACTIVE' " +
                         "  ORDER BY f.id, score DESC" +

@@ -11,6 +11,7 @@ public class RecordMapper {
         }
         return new RecordDto(
                 record.getId(),
+                record.getFile() != null ? record.getFile().getId() : null,
                 record.getFile() != null ? record.getFile().getName() : "Deleted File",
                 record.getAction(),
                 record.getUser() != null ? record.getUser().getEmail() : "Unknown User",
