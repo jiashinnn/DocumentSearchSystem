@@ -9,7 +9,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Vector;
 
 @Repository
 public interface ChunkRepository extends JpaRepository<Chunk, Long> {

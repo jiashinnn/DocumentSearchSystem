@@ -7,7 +7,7 @@ This guide details the complete flow of the **Document Upload and Vectorization 
 ## 🏗️ Architectural Overview
 The upload process uses a state-of-the-art **Retrieval-Augmented Generation (RAG)** pipeline. Here is the step-by-step journey:
 
-$$\text{File Drag \& Drop} \rightarrow \text{Vite Client (FormData)} \rightarrow \text{Spring Controller} \rightarrow \text{Cloudflare R2 Bucket (S3 API)} \rightarrow \text{Tika Parser (InputStream)} \rightarrow \text{LangChain4j Chunker} \rightarrow \text{Local Embedding} \rightarrow \text{PostgreSQL (pgvector)}$$
+$$\text{File Drag \& Drop} \rightarrow \text{Vite Client (FormData)} \rightarrow \text{Spring Controller} \rightarrow \text{Cloudflare R2 Bucket (S3 API)} \rightarrow \text{Tika Parser (InputStream)} \rightarrow \text{LangChain4j Chunker} \rightarrow \text{Ollama Multilingual Embedding} \rightarrow \text{PostgreSQL (pgvector)}$$
 
 ---
 
@@ -15,11 +15,11 @@ $$\text{File Drag \& Drop} \rightarrow \text{Vite Client (FormData)} \rightarrow
 
 | Layer | File in Project | Technical Duty |
 | :--- | :--- | :--- |
-| **1. Database Schema** | `files`, `chunks` | Stores file metadata and 384-dimensional dense vectors. |
+| **1. Database Schema** | `files`, `chunks` | Stores file metadata and 768-dimensional dense vectors. |
 | **2. Repository Layer** | [FileRepository](file:///c:/Documents/Github/DocumentSearchSystem/backend/src/main/java/com/OmniDoc/backend/repository/FileRepository.java), `ChunkRepository` | Manages file table and inserts embeddings using native SQL casts. |
 | **3. Data Transfer (DTO)** | `FileDto.java` | Standardizes response details (name, size, timestamp) sent to browser. |
 | **4. Mapper** | `FileMapper.java` | Translates the database File Entity to the lightweight File DTO. |
-| **5. Service (The Brain)** | [DocumentServiceImpl.java](file:///c:/Documents/Github/DocumentSearchSystem/backend/src/main/java/com/OmniDoc/backend/service/impl/DocumentServiceImpl.java) | Validates rules, uploads to R2, runs Tika on Stream, chunks text, generates embeddings. |
+| **5. Service (The Brain)** | [DocumentServiceImpl.java](file:///c:/Documents/Github/DocumentSearchSystem/backend/src/main/java/com/OmniDoc/backend/service/impl/DocumentServiceImpl.java) | Validates rules, uploads to R2, runs Tika on Stream, chunks text, generates embeddings via Ollama. |
 | **6. Web Controller** | [DocumentController.java](file:///c:/Documents/Github/DocumentSearchSystem/backend/src/main/java/com/OmniDoc/backend/controller/DocumentController.java) | Listens for POST multipart requests at `/api/documents/upload`. |
 | **7. Frontend Client** | [SearchView.tsx](file:///c:/Documents/Github/DocumentSearchSystem/frontend/src/components/SearchView.tsx) | Handles file inputs, filters extensions, posts `FormData`, and appends UI. |
 
@@ -30,7 +30,7 @@ $$\text{File Drag \& Drop} \rightarrow \text{Vite Client (FormData)} \rightarrow
 ### 1. Database & Schema
 We store document metadata separate from their vectorized semantic chunks:
 *   **`files` table**: Holds the main file properties (ID, name, original mime-type, R2 key path, status `'ACTIVE'` or `'INACTIVE'`).
-*   **`chunks` table**: Stores chunked text fragments. The `embedding` column uses the PostgreSQL **`vector(384)`** type.
+*   **`chunks` table**: Stores chunked text fragments. The `embedding` column uses the PostgreSQL **`vector(768)`** type.
 *   **Prerequisite**: Run `CREATE EXTENSION IF NOT EXISTS vector;` in PostgreSQL first to enable the semantic vector type.
 
 ---
@@ -83,11 +83,11 @@ When a file is uploaded, the service runs these sequential tasks:
     This chunks the text by paragraphs (max 300 tokens per chunk, with 30 tokens overlap to maintain paragraph context).
 
 #### Task E: Embedding Generation
-*   Each text chunk is sent to the local **`AllMiniLmL6V2EmbeddingModel`**:
+*   Each text chunk is sent to the local **Ollama `paraphrase-multilingual` model**:
     ```java
     float[] vector = embeddingModel.embed(chunkText).content().vector();
     ```
-    This generates a 384-dimensional mathematical vector representation of semantic meaning.
+    This generates a 768-dimensional mathematical vector representation of semantic meaning.
 
 #### Task F: Audit Log Write
 *   Saves a record to the `records` table with action `"Uploaded"`.

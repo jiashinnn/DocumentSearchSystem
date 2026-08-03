@@ -4,7 +4,7 @@ OmniDoc is a secure, high-performance web application designed for indexing, sea
 
 ---
 
-##  Tech Stack
+## 🛠️ Tech Stack
 
 ### Frontend
 *   **Core**: React.js (Vite + TypeScript)
@@ -13,13 +13,12 @@ OmniDoc is a secure, high-performance web application designed for indexing, sea
 
 ### Backend
 *   **Core**: Spring Boot (Java 17 + Maven)
-*   **Semantic Intelligence**: LangChain4j + Local In-Process ONNX Embedding Model (`all-minilm-l6-v2`)
+*   **Semantic Intelligence**: LangChain4j + Local Ollama Server Model (`paraphrase-multilingual`)
 *   **Text Extraction**: Apache Tika 3.0.0
 *   **Watermarking**: Apache PDFBox 3.0.7
 
 ### Database & Cloud Storage
-*   **Database**: PostgreSQL
-*   **Extensions**: `pgvector` (semantic search) and `pg_trgm` (trigram fuzzy keyword search)
+*   **Database**: PostgreSQL (with `pgvector` and `pg_trgm` extensions enabled)
 *   **Cloud Storage**: Cloudflare R2 (S3-compatible Object Storage)
 
 ---
@@ -35,7 +34,7 @@ DocumentSearchSystem/
 ├── backend/           # Spring Boot application (REST API)
 │   ├── src/           # Controller, Service, Repository, Entity, and DTO layers
 │   ├── pom.xml        # Maven dependencies definition
-│   └── *.md           # Architectural module guides (Upload, Download, Search, etc.)
+│   └── Readforme/     # Architectural module guides (Upload, Download, Search, etc.)
 └── README.md          # Project system documentation
 ```
 
@@ -47,8 +46,9 @@ DocumentSearchSystem/
 Ensure you have the following installed on your machine:
 1.  **Java JDK 17** or higher
 2.  **Node.js 18** or higher
-3.  **PostgreSQL** database server
+3.  **PostgreSQL** database server (with `pgvector` support)
 4.  **Cloudflare R2** bucket and API credentials
+5.  **Ollama** local model runner
 
 ---
 
@@ -66,7 +66,16 @@ Ensure you have the following installed on your machine:
 
 ---
 
-### 2. Configure Backend Environment
+### 2. Local AI Model Setup (Ollama)
+
+Start Ollama in the background and pull the 768-dimensional multilingual sentence-embedding model:
+```bash
+ollama pull paraphrase-multilingual
+```
+
+---
+
+### 3. Configure Backend Environment
 
 Open `backend/src/main/resources/application-local.properties` (or copy it from `application.properties`) and fill in your details:
 
@@ -85,7 +94,7 @@ r2.bucket-name=your_bucket_name
 
 ---
 
-### 3. Run Backend (Spring Boot)
+### 4. Run Backend (Spring Boot)
 
 Navigate to the `backend` directory and compile/run the application:
 
@@ -97,7 +106,7 @@ mvn clean spring-boot:run
 
 ---
 
-### 4. Configure & Run Frontend (React)
+### 5. Configure & Run Frontend (React)
 
 1.  Open `frontend/.env` and verify the backend API base URL matches:
     ```env

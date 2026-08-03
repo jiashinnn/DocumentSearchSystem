@@ -14,7 +14,7 @@ import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.splitter.DocumentByParagraphSplitter;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel;
+import dev.langchain4j.model.ollama.OllamaEmbeddingModel;
 import jakarta.transaction.Transactional;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -62,7 +62,10 @@ public class DocumentServiceImpl implements DocumentService {
     @Value("${file.upload.dir}")
     private String uploadDir;
 
-    private final EmbeddingModel embeddingModel = new AllMiniLmL6V2EmbeddingModel();
+    private final EmbeddingModel embeddingModel = OllamaEmbeddingModel.builder()
+            .baseUrl("http://localhost:11434")
+            .modelName("paraphrase-multilingual")
+            .build();
     private final Tika tika = new Tika();
     private static final Logger log = Logger.getLogger(DocumentServiceImpl.class.getName());
 

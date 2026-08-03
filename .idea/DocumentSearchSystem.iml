@@ -51,5 +51,6 @@
     <orderEntry type="library" name="Maven: org.apache.pdfbox:pdfbox:3.0.7" level="project" />
     <orderEntry type="library" name="Maven: software.amazon.awssdk:sdk-core:2.25.15" level="project" />
     <orderEntry type="library" name="Maven: software.amazon.awssdk:regions:2.25.15" level="project" />
+    <orderEntry type="library" name="Maven: dev.langchain4j:langchain4j-ollama:0.36.2" level="project" />
   </component>
 </module>
