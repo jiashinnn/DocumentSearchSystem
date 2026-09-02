@@ -644,14 +644,11 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
             )
           )}
         </div>
-        {/* 表格底部标准分页栏 (样式与 History 页面 100% 一致) */}
         {!isSearchActive && filteredDocuments.length > 0 && (
           <div className="border-t border-slate-200 px-6 py-3 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 shrink-0 select-none">
-            {/* 左侧：文档条数统计 */}
             <div className="text-slate-500 font-medium">
               Showing <span className="font-semibold text-slate-700">{startIndex + 1}</span> - <span className="font-semibold text-slate-700">{Math.min(startIndex + pageSize, totalItems)}</span> of <span className="font-semibold text-slate-700">{totalItems}</span> documents
             </div>
-            {/* 右侧：单页数量选择与翻页按钮组 */}
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1.5">
                 <span>Show</span>
@@ -665,7 +662,6 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
                   <option value={50}>50</option>
                 </select>
               </div>
-              {/* 四个导航按钮 */}
               <div className="flex items-center gap-1">
                 <button
                   disabled={currentPage === 1}
