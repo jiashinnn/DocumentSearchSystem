@@ -284,28 +284,28 @@ public class DocumentServiceImpl implements DocumentService {
             }
         }
         // 3. Plain Text (.txt) Watermarking
-        if ("txt".equals(extension)) {
-            try {
-                // Convert download bytes to string
-                String originalText = new String(fileBytes, java.nio.charset.StandardCharsets.UTF_8);
-                // Construct a security watermark header
-                String timestamp = LocalDateTime.now()
-                        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                String watermarkBanner = String.format(
-                        "========================================================================\n" +
-                                "                        CONFIDENTIAL DOCUMENT\n" +
-                                "  Downloaded By: %s (%s)\n" +
-                                "  Download Date: %s\n" +
-                                "  WARNING: Unauthorized distribution of this file is strictly prohibited.\n" +
-                                "========================================================================\n\n",
-                        user.getName(), user.getEmail(), timestamp);
-                String watermarkedText = watermarkBanner + originalText;
-                return new org.springframework.core.io.ByteArrayResource(
-                        watermarkedText.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            } catch (Exception e) {
-                log.log(Level.SEVERE, "Failed to apply TXT watermark, falling back to original", e);
-            }
-        }
+//        if ("txt".equals(extension)) {
+//            try {
+//                // Convert download bytes to string
+//                String originalText = new String(fileBytes, java.nio.charset.StandardCharsets.UTF_8);
+//                // Construct a security watermark header
+//                String timestamp = LocalDateTime.now()
+//                        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+//                String watermarkBanner = String.format(
+//                        "========================================================================\n" +
+//                                "                        CONFIDENTIAL DOCUMENT\n" +
+//                                "  Downloaded By: %s (%s)\n" +
+//                                "  Download Date: %s\n" +
+//                                "  WARNING: Unauthorized distribution of this file is strictly prohibited.\n" +
+//                                "========================================================================\n\n",
+//                        user.getName(), user.getEmail(), timestamp);
+//                String watermarkedText = watermarkBanner + originalText;
+//                return new org.springframework.core.io.ByteArrayResource(
+//                        watermarkedText.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+//            } catch (Exception e) {
+//                log.log(Level.SEVERE, "Failed to apply TXT watermark, falling back to original", e);
+//            }
+//        }
         // 4. Default fallback: Stream non-watermarked original file bytes (.docx,
         // .xlsx, .pptx)
         return new org.springframework.core.io.ByteArrayResource(fileBytes);
