@@ -23,8 +23,6 @@ public class Chunk {
     @Column(name = "chunk_text", nullable = false, columnDefinition = "TEXT")
     private String chunkText;
 
-    @Column(name = "embedding", nullable = false, columnDefinition = "vector(384)")
+    @Column(name = "embedding", nullable = false, columnDefinition = "vector(768)")
     private String embedding;
-//    384 cuz MiniLM model generates vectors of length 384
-//    this one use for pgvector
 }

@@ -36,14 +36,14 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
     setCurrentPage(1);
   }, [searchQuery, selectedType, pageSize]);
 
-  // Fetch documents from Spring Boot backend on mount
+  // Fetch documents
   const fetchDocuments = async () => {
     try {
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/documents`);
       if (response.ok) {
         const data = await response.json();
 
-        // Map backend file objects to frontend DocumentItem structure
+        // Map backend file objects to frontend structure
         const mappedDocs: DocumentItem[] = data.map((file: any) => {
           const extension = file.name.split('.').pop()?.toUpperCase() || 'UNKNOWN';
           const displaySize = file.size > 1024 * 1024
@@ -53,7 +53,7 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
           return {
             id: file.id.toString(),
             name: file.name,
-            // Format creation date nicely
+            // Format creation date
             dateModified: new Date(file.createdAt).toLocaleString('en-GB', {
               year: 'numeric',
               month: '2-digit',
@@ -63,7 +63,7 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
             }),
             type: extension,
             size: displaySize,
-            logs: [] // Document-specific logs are pulled dynamically from global state
+            logs: [] // Document-specific logs pulled dynamically from global state
           };
         });
 
@@ -152,7 +152,7 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
 
       if (!checkResponse.ok) {
         const errorMsg = await checkResponse.text();
-        toast.error(errorMsg || "File does not exist on the server!");
+        toast.error(errorMsg || "File does not exist on the server!")
         return;
       }
 
@@ -310,8 +310,8 @@ export default function SearchView({ onAddHistoryLog, onViewDocLogs, currentUser
 
     const searchToastId = toast.loading(`Performing hybrid search for "${searchQuery}"...`);
     try {
-      // Query our new backend search endpoint (70% Semantic, 30% Fuzzy/Filename weight, limit 5)
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/documents/search?query=${encodeURIComponent(searchQuery)}&alpha=0.7&limit=5`);
+      // Query backend search endpoint (70% Semantic, 30% Fuzzy/Filename weight)
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/documents/search?query=${encodeURIComponent(searchQuery)}&alpha=0.7`);
       if (response.ok) {
         const data = await response.json();
         setSearchResults(data);

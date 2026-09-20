@@ -1,5 +1,5 @@
 // This is Document Service Implementation
-// where I will use the Apache Tika parser, the LangChain4j paragraph splitter and the local embedding generator.
+// where I will use the Apache Tika parser, the LangChain4j paragraph splitter and the OllamaEmbeddingModel.
 package com.OmniDoc.backend.service.impl;
 
 import com.OmniDoc.backend.entity.File;
@@ -137,12 +137,8 @@ public class DocumentServiceImpl implements DocumentService {
         // Extract content using Apache Tika
         String extractedText;
         try (java.io.InputStream is = file.getInputStream()) {
-            // log.info(">>> [TIKA] Extracting text content from file...");
             extractedText = tika.parseToString(is);
-            // log.info(">>> [TIKA] Successfully extracted {} characters of text.",
-            // extractedText != null ? extractedText.length() : 0);
         } catch (Exception e) {
-            // log.error(">>> [TIKA] Failed to extract text: ", e);
             throw new RuntimeException("Failed to extract text from file: " + e.getMessage());
         }
 
@@ -150,7 +146,6 @@ public class DocumentServiceImpl implements DocumentService {
         if (extractedText != null && !extractedText.trim().isEmpty()) {
             Document document = Document.from(extractedText);
             List<TextSegment> segments = new DocumentByParagraphSplitter(300, 30).split(document);
-            // log.info(">>> [CHUNKER] Text split into {} raw segments.", segments.size());
 
             List<String> cleanChunks = segments.stream()
                     .map(TextSegment::text)
@@ -159,10 +154,6 @@ public class DocumentServiceImpl implements DocumentService {
                     .distinct()
                     .collect(Collectors.toList());
 
-            // log.info(">>> [CHUNKER] Deduplicated & cleaned. Total chunks to embed: {}",
-            // cleanChunks.size());
-            // log.info(">>> [EMBEDDING] Vectorizing chunks using MiniLM model...");
-
             // Convert chunks to vector embeddings and store in PostgresSQL
             int chunkIndex = 1;
             for (String chunkText : cleanChunks) {
@@ -170,13 +161,7 @@ public class DocumentServiceImpl implements DocumentService {
                 String vectorString = Arrays.toString(vector);
                 // Call repository query to cast vector and insert
                 chunkRepository.saveVectorChunk(dbFile.getId(), chunkText, vectorString);
-                // log.info(">>> [EMBEDDING] Vectorized & saved Chunk #{}/{} (Length: {}
-                // chars)",
-                // chunkIndex++, cleanChunks.size(), chunkText.length());
             }
-        } else {
-            // log.warn(">>> [CHUNKER] Document has no readable text content. Skipped
-            // chunking.");
         }
 
         // Save to Record table
@@ -188,9 +173,6 @@ public class DocumentServiceImpl implements DocumentService {
         auditRecord.setAction("Uploaded");
         auditRecord.setDateAction(LocalDateTime.now());
         recordRepository.save(auditRecord);
-
-        // log.info(">>> [AUDIT] Saved audit log. Upload complete for file ID: {}",
-        // dbFile.getId());
 
         return dbFile;
     }
@@ -262,7 +244,7 @@ public class DocumentServiceImpl implements DocumentService {
         auditRecord.setAction("Downloaded");
         auditRecord.setDateAction(LocalDateTime.now());
         recordRepository.save(auditRecord);
-        // 1. Download file bytes directly from Cloudflare R2 bucket
+        // Download file bytes directly from Cloudflare R2 bucket
         byte[] fileBytes;
         try {
             software.amazon.awssdk.core.ResponseBytes<software.amazon.awssdk.services.s3.model.GetObjectResponse> objectBytes = s3Client
@@ -273,7 +255,7 @@ public class DocumentServiceImpl implements DocumentService {
             throw new java.io.FileNotFoundException("File not found on cloud storage: " + file.getPath());
         }
         String extension = getFileExtension(file.getName()).toLowerCase();
-        // 2. PDF Watermarking using the memory byte array
+        // PDF Watermarking using the memory byte array
         if ("pdf".equals(extension)) {
             try {
                 String watermarkText = user.getName() + " (" + user.getEmail() + ")";
@@ -283,29 +265,33 @@ public class DocumentServiceImpl implements DocumentService {
                 log.log(Level.SEVERE, "Failed to apply PDF watermark, falling back to original", e);
             }
         }
-        // 3. Plain Text (.txt) Watermarking
-//        if ("txt".equals(extension)) {
-//            try {
-//                // Convert download bytes to string
-//                String originalText = new String(fileBytes, java.nio.charset.StandardCharsets.UTF_8);
-//                // Construct a security watermark header
-//                String timestamp = LocalDateTime.now()
-//                        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-//                String watermarkBanner = String.format(
-//                        "========================================================================\n" +
-//                                "                        CONFIDENTIAL DOCUMENT\n" +
-//                                "  Downloaded By: %s (%s)\n" +
-//                                "  Download Date: %s\n" +
-//                                "  WARNING: Unauthorized distribution of this file is strictly prohibited.\n" +
-//                                "========================================================================\n\n",
-//                        user.getName(), user.getEmail(), timestamp);
-//                String watermarkedText = watermarkBanner + originalText;
-//                return new org.springframework.core.io.ByteArrayResource(
-//                        watermarkedText.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-//            } catch (Exception e) {
-//                log.log(Level.SEVERE, "Failed to apply TXT watermark, falling back to original", e);
-//            }
-//        }
+        // Plain Text (.txt) Watermarking
+        // if ("txt".equals(extension)) {
+        // try {
+        // // Convert download bytes to string
+        // String originalText = new String(fileBytes,
+        // java.nio.charset.StandardCharsets.UTF_8);
+        // // Construct a security watermark header
+        // String timestamp = LocalDateTime.now()
+        // .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        // String watermarkBanner = String.format(
+        // "========================================================================\n"
+        // +
+        // " CONFIDENTIAL DOCUMENT\n" +
+        // " Downloaded By: %s (%s)\n" +
+        // " Download Date: %s\n" +
+        // " WARNING: Unauthorized distribution of this file is strictly prohibited.\n"
+        // +
+        // "========================================================================\n\n",
+        // user.getName(), user.getEmail(), timestamp);
+        // String watermarkedText = watermarkBanner + originalText;
+        // return new org.springframework.core.io.ByteArrayResource(
+        // watermarkedText.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        // } catch (Exception e) {
+        // log.log(Level.SEVERE, "Failed to apply TXT watermark, falling back to
+        // original", e);
+        // }
+        // }
         // 4. Default fallback: Stream non-watermarked original file bytes (.docx,
         // .xlsx, .pptx)
         return new org.springframework.core.io.ByteArrayResource(fileBytes);
@@ -356,33 +342,55 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
-    public List<com.OmniDoc.backend.dto.SearchResultDto> searchDocuments(String queryText, Double alpha, int limit) {
-        double filenameThreshold = 0.30; // 30% filename match threshold (Tier 1)
-        double minScoreCutoff = 0.25; // 25% minimum combined score cutoff (Tier 3)
-        // Attempt Filename-only match first
+    public List<com.OmniDoc.backend.dto.SearchResultDto> searchDocuments(String queryText, Double alpha) {
+        double filenameThreshold = 0.30; // 30% filename similarity threshold (Tier 1)
+        double minScoreCutoff = 0.25; // 25% minimum hybrid score cutoff (Tier 2)
+
+        // === TIER 1: Filename Similarity Search ===
         List<ChunkRepository.SearchResultProjection> filenameMatches = chunkRepository.searchByFilename(queryText,
                 filenameThreshold);
-        List<ChunkRepository.SearchResultProjection> finalProjections;
-        if (!filenameMatches.isEmpty()) {
-            log.info(">>> [SEARCH] [TIER 1] Filename match triggered for query: '" + queryText + "'. Found "
-                    + filenameMatches.size() + " matches.");
-            finalProjections = filenameMatches;
-        } else {
-            // Fallback to Hybrid (Semantic + Fuzzy) Search
-            log.info(
-                    ">>> [SEARCH] [TIER 2] No filename match. Running Hybrid Semantic Search for: '" + queryText + "'");
-            float[] queryVector = embeddingModel.embed(queryText).content().vector();
-            String queryVectorString = Arrays.toString(queryVector);
-            finalProjections = chunkRepository.searchHybrid(queryVectorString, queryText, alpha, minScoreCutoff, limit);
+
+        // === TIER 2: Hybrid Content Search ===
+        float[] queryVector = embeddingModel.embed(queryText).content().vector();
+        String queryVectorString = Arrays.toString(queryVector);
+        List<ChunkRepository.SearchResultProjection> hybridMatches = chunkRepository.searchHybrid(queryVectorString,
+                queryText, alpha, minScoreCutoff);
+
+        // === MERGE ===
+        java.util.Map<Long, ChunkRepository.SearchResultProjection> mergedMap = new java.util.LinkedHashMap<>();
+
+        // Add Tier 1 filename matches first
+        for (ChunkRepository.SearchResultProjection p : filenameMatches) {
+            mergedMap.put(p.getFileId(), p);
         }
+
+        // Add Tier 2 hybrid matches
+        for (ChunkRepository.SearchResultProjection p : hybridMatches) {
+            mergedMap.merge(p.getFileId(), p,
+                    (existing, incoming) -> incoming.getScore() > existing.getScore() ? incoming : existing);
+        }
+
+        // Sort merged results by score descending
+        List<ChunkRepository.SearchResultProjection> finalProjections = mergedMap.values().stream()
+                .sorted((a, b) -> Double.compare(b.getScore(), a.getScore()))
+                .collect(Collectors.toList());
+
         // Print scores to terminal and map to DTOs
         return finalProjections.stream()
                 .map(p -> {
-                    log.info(">>> [SEARCH MATCH] File: '" + p.getDocName() + "' | Combined Score: " +
-                            String.format("%.3f", p.getScore()) + " (Semantic: " +
-                            String.format("%.3f", p.getSemanticScore()) + ", Fuzzy: " +
-                            String.format("%.3f", p.getFuzzyScore()) + ")");
-
+                    String tier = filenameMatches.stream()
+                            .anyMatch(f -> f.getFileId().equals(p.getFileId()))
+                                    ? "TIER 1 (Filename)"
+                                    : "TIER 2 (Hybrid)";
+                    System.out.println("\n================= [EVALUATION TEST] =================");
+                    System.out.println(" Query       : \"" + queryText + "\"");
+                    System.out.println(" Matched Via : " + tier);
+                    System.out.println(" Document    : " + p.getDocName());
+                    System.out.println(" ------------------------------------------------------");
+                    System.out.printf("  [1] Fuzzy Score    : %.4f%n", p.getFuzzyScore());
+                    System.out.printf("  [2] Semantic Score : %.4f%n", p.getSemanticScore());
+                    System.out.printf("  [3] Hybrid Score   : %.4f%n", p.getScore());
+                    System.out.println("=======================================================\n");
                     return new com.OmniDoc.backend.dto.SearchResultDto(
                             p.getId(),
                             p.getFileId(),

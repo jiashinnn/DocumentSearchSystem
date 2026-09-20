@@ -115,14 +115,12 @@ public class DocumentController {
     @GetMapping("/search")
     public ResponseEntity<?> searchDocuments(
             @RequestParam("query") String query,
-            @RequestParam(value = "alpha", defaultValue = "0.3") Double alpha,
-            @RequestParam(value = "limit", defaultValue = "5") int limit) {
+            @RequestParam(value = "alpha", defaultValue = "0.3") Double alpha) {
         try {
             if (query == null || query.trim().isEmpty()) {
                 return ResponseEntity.badRequest().body("Search query text cannot be empty.");
             }
-            java.util.List<com.OmniDoc.backend.dto.SearchResultDto> results = documentService.searchDocuments(query,
-                    alpha, limit);
+            java.util.List<com.OmniDoc.backend.dto.SearchResultDto> results = documentService.searchDocuments(query, alpha);
             return ResponseEntity.ok(results);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

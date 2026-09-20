@@ -1,121 +1,46 @@
-# OmniDoc - Smart Document Search System
+# OMNIDOC: AN AI-POWERED HYBRID DOCUMENT RETRIEVAL SYSTEM FOR INTELLIGENT CORPORATE KNOWLEDGE MANAGEMENT
 
-OmniDoc is a secure, high-performance web application designed for indexing, searching, and managing internal corporate documentation. It utilizes a state-of-the-art **Retrieval-Augmented Generation (RAG)** pipeline to perform hybrid semantic and keyword text search on document content.
-
----
-
-## 🛠️ Tech Stack
-
-### Frontend
-*   **Core**: React.js (Vite + TypeScript)
-*   **Styling**: Tailwind CSS v4 + shadcn/ui
-*   **Icons**: Lucide React
-
-### Backend
-*   **Core**: Spring Boot (Java 17 + Maven)
-*   **Semantic Intelligence**: LangChain4j + Local Ollama Server Model (`paraphrase-multilingual`)
-*   **Text Extraction**: Apache Tika 3.0.0
-*   **Watermarking**: Apache PDFBox 3.0.7
-
-### Database & Cloud Storage
-*   **Database**: PostgreSQL (with `pgvector` and `pg_trgm` extensions enabled)
-*   **Cloud Storage**: Cloudflare R2 (S3-compatible Object Storage)
+**OmniDoc** is a secure, high-performance web application designed to help enterprises index, manage, and retrieve internal corporate knowledge effortlessly. It leverages a state-of-the-art **Retrieval-Augmented Generation (RAG)** pipeline to perform hybrid search, combining semantic meaning with keyword matching to deliver highly accurate document retrieval.
 
 ---
 
-## Project Structure
-
-```text
-DocumentSearchSystem/
-├── frontend/          # React single page application (UI)
-│   ├── src/           # Frontend components, assets, and styling
-│   ├── .env           # Frontend environment variables (API URL)
-│   └── tsconfig.json  # TypeScript configuration
-├── backend/           # Spring Boot application (REST API)
-│   ├── src/           # Controller, Service, Repository, Entity, and DTO layers
-│   ├── pom.xml        # Maven dependencies definition
-│   └── Readforme/     # Architectural module guides (Upload, Download, Search, etc.)
-└── README.md          # Project system documentation
-```
+## Key Features
+* **Hybrid Search Engine**: Combines filename similarity (`pg_trgm`) and deep semantic content understanding (`pgvector`).
+* **Contextual Snippets**: Automatically highlights exact sentences within a document where the search query matches.
+* **Intelligent Processing**: Extracts text from uploaded files, chunks the content, and generates vector embeddings using a local Ollama AI model.
+* **Audit Logging**: Comprehensive activity tracking for every document upload, download, and deletion.
 
 ---
 
-## Getting Started
+## System Architecture
 
-### Prerequisites
-Ensure you have the following installed on your machine:
-1.  **Java JDK 17** or higher
-2.  **Node.js 18** or higher
-3.  **PostgreSQL** database server (with `pgvector` support)
-4.  **Cloudflare R2** bucket and API credentials
-5.  **Ollama** local model runner
+![System Architecture](./assets/architecture-diagram.png)
 
 ---
 
-### 1. Database Setup
+## Search Workflow Algorithm
 
-1.  Create a new PostgreSQL database:
-    ```sql
-    CREATE DATABASE omnidoc_db;
-    ```
-2.  Connect to `omnidoc_db` and enable the vector and trigram extensions:
-    ```sql
-    CREATE EXTENSION IF NOT EXISTS vector;
-    CREATE EXTENSION IF NOT EXISTS pg_trgm;
-    ```
+![Search Workflow](./assets/search-workflow.png)
 
 ---
 
-### 2. Local AI Model Setup (Ollama)
+## User Interface
 
-Start Ollama in the background and pull the 768-dimensional multilingual sentence-embedding model:
-```bash
-ollama pull paraphrase-multilingual
-```
+### 1. Main Dashboard & Hybrid Search
 
----
+![Search Dashboard](./assets/search-dashboard.png)
 
-### 3. Configure Backend Environment
+### 2. Document Management & Upload
 
-Open `backend/src/main/resources/application-local.properties` (or copy it from `application.properties`) and fill in your details:
-
-```properties
-# Database details
-spring.datasource.url=jdbc:postgresql://localhost:5432/omnidoc_db
-spring.datasource.username=your_postgres_username
-spring.datasource.password=your_postgres_password
-
-# Cloudflare R2 Credentials
-r2.endpoint-url=https://<your_account_id>.r2.cloudflarestorage.com
-r2.access-key-id=<your_access_key_id>
-r2.secret-access-key=<your_secret_access_key>
-r2.bucket-name=your_bucket_name
-```
+![Document Upload](./assets/document-upload.png)
 
 ---
 
-### 4. Run Backend (Spring Boot)
-
-Navigate to the `backend` directory and compile/run the application:
-
-```bash
-cd backend
-mvn clean spring-boot:run
-```
-> The API will be accessible at: `http://localhost:8080`
+## Tech Stack
+* **Frontend**: React 19 (Vite), TypeScript, Tailwind CSS v4, shadcn/ui
+* **Backend**: Spring Boot 3 (Java 17), LangChain4j, Apache Tika
+* **Database & Storage**: PostgreSQL (`pgvector`, `pg_trgm`), Cloudflare R2
+* **AI Engine**: Local Ollama Server (`paraphrase-multilingual` model)
 
 ---
-
-### 5. Configure & Run Frontend (React)
-
-1.  Open `frontend/.env` and verify the backend API base URL matches:
-    ```env
-    VITE_API_BASE_URL=http://localhost:8080
-    ```
-2.  Install dependencies and start the Vite local development server:
-    ```bash
-    cd frontend
-    npm install
-    npm run dev
-    ```
-> The portal will be accessible at: `http://localhost:5173`
+*For detailed setup, configuration, and API integration instructions, please refer to the `frontend/README.md` and developer guides.*

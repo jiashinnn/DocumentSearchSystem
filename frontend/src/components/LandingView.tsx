@@ -21,8 +21,8 @@ export default function LandingView({ onLoginSuccess }: LandingViewProps) {
         {/* Left Column: System Introduction */}
         <div className="space-y-5 text-left">
           <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-800 tracking-tight leading-tight">
-            Secure Smart Document Search for <br className="hidden sm:inline" />
-            <span className="text-blue-900">OmniDoc</span>
+            AI-Powered Hybrid Document Retrieval System for <br className="hidden sm:inline" />
+            <span className="text-blue-900">Intelligent Corporate Knowledge Management</span>
           </h1>
 
           <p className="text-base text-slate-600 leading-relaxed max-w-lg">

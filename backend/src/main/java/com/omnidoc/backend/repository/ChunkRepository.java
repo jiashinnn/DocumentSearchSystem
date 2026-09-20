@@ -20,20 +20,18 @@ public interface ChunkRepository extends JpaRepository<Chunk, Long> {
 
         // Filename Search
         @Query(value = "SELECT * FROM (" +
-                        "  SELECT DISTINCT ON (f.id)" +
-                        "         c.id as id, c.file_id as fileId, f.name as docName, c.chunk_text as chunkText, " +
-                        "         0.0 as semanticScore, " +
-                        "         greatest(similarity(f.name, :queryText), similarity(regexp_replace(f.name, '\\.[^.]+$', ''), :queryText)) as fuzzyScore, "
-                        +
-                        "         greatest(similarity(f.name, :queryText), similarity(regexp_replace(f.name, '\\.[^.]+$', ''), :queryText)) as score "
-                        +
-                        "  FROM chunks c " +
-                        "  JOIN files f ON c.file_id = f.id " +
-                        "  WHERE f.status = 'ACTIVE' " +
-                        "  ORDER BY f.id, score DESC" +
-                        ") sub " +
-                        "WHERE score >= :threshold " +
-                        "ORDER BY score DESC", nativeQuery = true)
+                "  SELECT DISTINCT ON (f.id)" +
+                "         c.id as id, c.file_id as fileId, f.name as docName, c.chunk_text as chunkText, " +
+                "         0.0 as semanticScore, " +
+                "         greatest(similarity(f.name, :queryText), similarity(regexp_replace(f.name, '\\.[^.]+$', ''), :queryText), CASE WHEN f.name ILIKE '%' || :queryText || '%' THEN 1.0 WHEN regexp_replace(f.name, '\\.[^.]+$', '') ILIKE '%' || :queryText || '%' THEN 1.0 ELSE 0.0 END) as fuzzyScore, " +
+                "         greatest(similarity(f.name, :queryText), similarity(regexp_replace(f.name, '\\.[^.]+$', ''), :queryText), CASE WHEN f.name ILIKE '%' || :queryText || '%' THEN 1.0 WHEN regexp_replace(f.name, '\\.[^.]+$', '') ILIKE '%' || :queryText || '%' THEN 1.0 ELSE 0.0 END) as score " +
+                "  FROM chunks c " +
+                "  JOIN files f ON c.file_id = f.id " +
+                "  WHERE f.status = 'ACTIVE' " +
+                "  ORDER BY f.id, score DESC" +
+                ") sub " +
+                "WHERE score >= :threshold " +
+                "ORDER BY score DESC", nativeQuery = true)
 
         List<SearchResultProjection> searchByFilename(
                         @Param("queryText") String queryText,
@@ -41,28 +39,25 @@ public interface ChunkRepository extends JpaRepository<Chunk, Long> {
 
         // Hybrid Search
         @Query(value = "SELECT * FROM (" +
-            "  SELECT DISTINCT ON (f.id)" +
-            "         c.id as id, c.file_id as fileId, f.name as docName, c.chunk_text as chunkText, " +
-            "         (1 - (c.embedding <=> cast(:queryVector as vector))) as semanticScore, " +
-            "         word_similarity(:queryText, c.chunk_text) as fuzzyScore, " +
-            "         ((:alpha * (1 - (c.embedding <=> cast(:queryVector as vector)))) + " +
-            "          ((1 - :alpha) * word_similarity(:queryText, c.chunk_text))) as score " +
-
-            "  FROM chunks c " +
-                        "  JOIN files f ON c.file_id = f.id " +
-                        "  WHERE f.status = 'ACTIVE' " +
-                        "  ORDER BY f.id, score DESC" +
-                        ") sub " +
-                        "WHERE score >= :minScore " +
-                        "ORDER BY score DESC " +
-                        "LIMIT :limitSize", nativeQuery = true)
+                "  SELECT DISTINCT ON (f.id)" +
+                "         c.id as id, c.file_id as fileId, f.name as docName, c.chunk_text as chunkText, " +
+                "         (1 - (c.embedding <=> cast(:queryVector as vector))) as semanticScore, " +
+                "         greatest(word_similarity(:queryText, c.chunk_text), CASE WHEN c.chunk_text ILIKE '%' || :queryText || '%' THEN 1.0 ELSE 0.0 END) as fuzzyScore, " +
+                "         ((:alpha * (1 - (c.embedding <=> cast(:queryVector as vector)))) + " +
+                "          ((1 - :alpha) * greatest(word_similarity(:queryText, c.chunk_text), CASE WHEN c.chunk_text ILIKE '%' || :queryText || '%' THEN 1.0 ELSE 0.0 END))) as score " +
+                "  FROM chunks c " +
+                "  JOIN files f ON c.file_id = f.id " +
+                "  WHERE f.status = 'ACTIVE' " +
+                "  ORDER BY f.id, score DESC" +
+                ") sub " +
+                "WHERE score >= :minScore " +
+                "ORDER BY score DESC", nativeQuery = true)
 
         List<SearchResultProjection> searchHybrid(
                         @Param("queryVector") String queryVector,
                         @Param("queryText") String queryText,
                         @Param("alpha") Double alpha,
-                        @Param("minScore") Double minScore,
-                        @Param("limitSize") int limitSize);
+                        @Param("minScore") Double minScore);
 
         interface SearchResultProjection {
                 Long getId();

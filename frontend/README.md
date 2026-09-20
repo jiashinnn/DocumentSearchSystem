@@ -1,6 +1,6 @@
-# OmniDoc - Smart Document Search System (Frontend & Backend Integration Guide)
+# OMNIDOC: AN AI-POWERED HYBRID DOCUMENT RETRIEVAL SYSTEM FOR INTELLIGENT CORPORATE KNOWLEDGE MANAGEMENT (Frontend Guide)
 
-This repository contains the frontend implementation for **OmniDoc**, a smart concept-based document search system. The frontend is built as a highly interactive React application with standard, clean, and modular component structures. 
+This repository contains the frontend implementation for **OmniDoc**, an AI-powered hybrid document retrieval system. The frontend is built as a highly interactive React application with standard, clean, and modular component structures. 
 
 This document serves as a detailed technical specification of the frontend architecture, state management, and interaction flows to act as a blueprint for implementing the matching backend API.
 

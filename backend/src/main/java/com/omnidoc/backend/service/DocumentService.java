@@ -21,5 +21,5 @@ public interface DocumentService {
 
     org.springframework.core.io.Resource downloadDocument(Long id, String userEmail) throws java.io.FileNotFoundException;
 
-    List<com.OmniDoc.backend.dto.SearchResultDto> searchDocuments(String queryText, Double alpha, int limit);
+    List<com.OmniDoc.backend.dto.SearchResultDto> searchDocuments(String queryText, Double alpha);
 }
