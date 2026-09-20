@@ -41,6 +41,3 @@
 * **Backend**: Spring Boot 3 (Java 17), LangChain4j, Apache Tika
 * **Database & Storage**: PostgreSQL (`pgvector`, `pg_trgm`), Cloudflare R2
 * **AI Engine**: Local Ollama Server (`paraphrase-multilingual` model)
-
----
-*For detailed setup, configuration, and API integration instructions, please refer to the `frontend/README.md` and developer guides.*
